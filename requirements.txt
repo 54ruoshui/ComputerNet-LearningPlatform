@@ -1,0 +1,54 @@
+# GraphRAG 系统依赖包
+# 计算机网络知识图谱问答系统（层级版本）
+# Python 版本要求: >=3.9, <3.14
+
+# ============ 核心依赖 ============
+# Neo4j 图数据库驱动
+neo4j>=5.15.0
+
+# 环境变量管理
+python-dotenv>=1.0.0
+
+# ============ AI 模型 ============
+# 智谱AI SDK - 用于 LLM 推理
+zhipuai>=2.0.0
+
+# LangChain / LangGraph - RAG 框架与对话记忆
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-openai>=0.3.0
+langgraph>=0.2.28
+
+# 阿里云 DashScope SDK - 文本向量嵌入
+dashscope>=1.17.0
+
+# ============ Web 框架 ============
+# FastAPI Web 框架
+fastapi>=0.110.0
+
+# ASGI 服务器
+uvicorn>=0.27.0
+
+# 模板引擎
+jinja2>=3.1.2
+
+# 数据校验（FastAPI 依赖）
+pydantic>=2.0.0
+
+# HTTP 请求库
+requests>=2.31.0
+
+# ============ 可视化 ============
+# Graphviz - 知识图谱可视化渲染（需同时安装系统 graphviz）
+graphviz>=0.20.0
+
+# ============ PDF解析（仅 build_index_from_docs 使用）============
+# 旧脚本保留，新方案使用 JSON 导入不需要以下库
+# PyMuPDF>=1.24.0
+# pypdf>=4.0.0
+# pdfplumber>=0.10.0
+
+# ============ 图算法（仅旧社区检测使用）============
+# 新方案按人工层级组织，不需要社区检测
+# igraph>=0.11.0
+# networkx>=3.0

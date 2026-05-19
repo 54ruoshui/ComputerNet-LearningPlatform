@@ -1,0 +1,38 @@
+# Environment & secrets
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Data (generated / large files)
+data/checkpoints/
+data/generated_images/
+*.pdf
+*.txt
+!requirements.txt
+
+# Databases
+*.db
+graphrag_checkpoints.db
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code internal
+.claude/
+
+# Generated
+quality_metrics_export.json

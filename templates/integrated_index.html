@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GraphRAG</title>
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style-new.css') }}">
+</head>
+<body>
+
+    <div class="app-layout">
+
+        <!-- ========== Sidebar ========== -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <div class="brand-mark">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+                    </div>
+                    <span class="brand-text">GraphRAG</span>
+                </div>
+                <button class="btn-icon" id="sidebarCloseBtn" onclick="toggleSidebar()" title="收起侧边栏">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+            </div>
+
+            <button class="btn-new-chat" onclick="startNewSession()">
+                <i class="fas fa-plus"></i>
+                <span>新会话</span>
+            </button>
+
+            <div class="session-indicator" id="sessionIndicator" style="display:none;">
+                <span class="session-dot"></span>
+                <span>会话记忆中</span>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-header">
+                    <span>历史记录</span>
+                    <button class="btn-ghost btn-sm" onclick="clearHistory()" title="清空历史">
+                        <i class="fas fa-trash-can"></i>
+                    </button>
+                </div>
+                <div class="history-list" id="historyList">
+                    <div class="history-empty" id="historyContainer">
+                        <i class="far fa-comment-dots"></i>
+                        <span>暂无记录</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="sidebar-stat">
+                    <i class="fas fa-database"></i>
+                    <span id="totalNodes" class="stat-num">-</span>
+                    <span class="stat-label">知识节点</span>
+                </div>
+                <div class="sidebar-status">
+                    <span class="status-dot" id="backend-status"></span>
+                    <span id="statusText" class="status-label">连接中...</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Sidebar Overlay (mobile) -->
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+        <!-- ========== Main ========== -->
+        <main class="main" id="mainArea">
+            <!-- Topbar -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="btn-icon" id="topbarMenuBtn" onclick="toggleSidebar()" title="侧边栏">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <span class="topbar-title">GraphRAG</span>
+                </div>
+                <div class="topbar-right">
+                    <span class="topbar-stat">
+                        <i class="fas fa-circle-nodes"></i>
+                        <span id="topbarNodeCount">-</span>
+                    </span>
+                </div>
+            </header>
+
+            <!-- Chat Area -->
+            <div class="chat-scroll" id="chatScroll">
+                <div class="chat-inner" id="chatMessages">
+
+                    <!-- Welcome -->
+                    <div class="welcome" id="welcomeBlock">
+                        <div class="welcome-head">
+                            <h1>GraphRAG</h1>
+                            <p>基于知识图谱增强的计算机网络智能问答</p>
+                        </div>
+                        <div class="welcome-grid">
+                            <button class="topic-card" onclick="askQuestion('TCP和UDP有什么区别？')">
+                                <div class="topic-icon"><i class="fas fa-network-wired"></i></div>
+                                <div class="topic-body">
+                                    <strong>TCP vs UDP</strong>
+                                    <span>两者的区别与应用场景</span>
+                                </div>
+                            </button>
+                            <button class="topic-card" onclick="askQuestion('HTTP和HTTPS的关系是什么？')">
+                                <div class="topic-icon"><i class="fas fa-lock"></i></div>
+                                <div class="topic-body">
+                                    <strong>HTTP 与 HTTPS</strong>
+                                    <span>加密通信原理详解</span>
+                                </div>
+                            </button>
+                            <button class="topic-card" onclick="askQuestion('路由器的工作原理是什么？')">
+                                <div class="topic-icon"><i class="fas fa-route"></i></div>
+                                <div class="topic-body">
+                                    <strong>路由器原理</strong>
+                                    <span>数据包转发机制</span>
+                                </div>
+                            </button>
+                            <button class="topic-card" onclick="askQuestion('什么是VLAN，它有什么作用？')">
+                                <div class="topic-icon"><i class="fas fa-layer-group"></i></div>
+                                <div class="topic-body">
+                                    <strong>VLAN 技术</strong>
+                                    <span>虚拟局域网划分</span>
+                                </div>
+                            </button>
+                            <button class="topic-card" onclick="askQuestion('三次握手和四次挥手的过程是什么？')">
+                                <div class="topic-icon"><i class="fas fa-handshake"></i></div>
+                                <div class="topic-body">
+                                    <strong>三次握手</strong>
+                                    <span>TCP 连接建立与释放</span>
+                                </div>
+                            </button>
+                            <button class="topic-card" onclick="askQuestion('DNS解析的步骤有哪些？')">
+                                <div class="topic-icon"><i class="fas fa-globe"></i></div>
+                                <div class="topic-body">
+                                    <strong>DNS 解析</strong>
+                                    <span>域名到 IP 的转换流程</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Input -->
+            <div class="input-area">
+                <div class="search-suggestions" id="searchSuggestions"></div>
+                <div class="input-wrap">
+                    <input type="text"
+                           class="chat-input"
+                           id="questionInput"
+                           placeholder="输入你的网络相关问题..."
+                           onkeypress="handleKeyPress(event)"
+                           autocomplete="off">
+                    <button class="btn-send" id="sendBtn" onclick="submitQuery()" title="发送">
+                        <i class="fas fa-arrow-up"></i>
+                    </button>
+                </div>
+                <div class="input-meta">
+                    <span>GraphRAG 知识图谱问答</span>
+                    <span><kbd>Enter</kbd> 发送</span>
+                </div>
+            </div>
+        </main>
+
+        <!-- ========== Graph Panel ========== -->
+        <div class="drawer-overlay" id="graphPanelOverlay" onclick="closeGraphPanel()"></div>
+        <aside class="graph-panel" id="graphPanel">
+            <div class="gp-header">
+                <h3><i class="fas fa-diagram-project"></i> 知识图谱</h3>
+                <button class="btn-icon" onclick="closeGraphPanel()" title="关闭"><i class="fas fa-xmark"></i></button>
+            </div>
+            <div class="gp-stats">
+                <div class="gp-stat">
+                    <span id="graphNodeCount">0</span>
+                    <small>节点</small>
+                </div>
+                <div class="gp-stat">
+                    <span id="graphEdgeCount">0</span>
+                    <small>关系</small>
+                </div>
+            </div>
+            <div class="gp-body" id="graphPanelBody">
+                <div id="d3GraphContainer"></div>
+                <div class="graph-placeholder" id="graphPlaceholder">
+                    <i class="fas fa-diagram-project"></i>
+                    <p>查询后查看知识图谱可视化</p>
+                </div>
+            </div>
+            <div class="gp-actions">
+                <button onclick="resetGraphLayout()" title="重置布局">
+                    <i class="fas fa-arrows-rotate"></i> 重置
+                </button>
+                <button onclick="zoomGraphToFit()" title="适应画布">
+                    <i class="fas fa-expand"></i> 适应
+                </button>
+                <button onclick="exportGraphSVG()" title="导出 SVG">
+                    <i class="fas fa-image"></i> SVG
+                </button>
+                <button onclick="exportSubgraph()" title="导出子图数据">
+                    <i class="fas fa-download"></i> 数据
+                </button>
+            </div>
+        </aside>
+
+    </div>
+
+    <!-- Thinking Indicator -->
+    <div class="thinking-bar" id="thinkingIndicator" style="display:none;">
+        <div class="thinking-dots"><span></span><span></span><span></span></div>
+        <span>正在检索知识图谱...</span>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="messageContainer"></div>
+
+    <!-- Lightbox -->
+    <div class="lightbox" id="imageLightbox" onclick="closeImageLightbox()">
+        <img id="lightboxImage" src="" alt="知识图谱">
+        <button class="lightbox-close"><i class="fas fa-xmark"></i></button>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="{{ url_for('static', path='js/neo4j-graph.js') }}"></script>
+    <script src="{{ url_for('static', path='js/integrated-app.js') }}"></script>
+
+    <script>
+        async function checkSystemStatus() {
+            try {
+                const response = await fetch('/api/health');
+                const status = await response.json();
+                const el = document.getElementById('backend-status');
+                const text = document.getElementById('statusText');
+                if (el && status.status === 'healthy') {
+                    el.className = 'status-dot online';
+                    if (text) text.textContent = '系统正常';
+                } else if (el) {
+                    el.className = 'status-dot offline';
+                    if (text) text.textContent = '服务异常';
+                }
+            } catch (error) {
+                const el = document.getElementById('backend-status');
+                const text = document.getElementById('statusText');
+                if (el) el.className = 'status-dot offline';
+                if (text) text.textContent = '连接失败';
+            }
+        }
+
+        // Sidebar toggle
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const isOpen = sidebar.classList.contains('open');
+            if (isOpen) {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('active');
+            } else {
+                sidebar.classList.add('open');
+                overlay.classList.add('active');
+            }
+        }
+
+        // Graph panel
+        function openGraphPanel() {
+            document.getElementById('graphPanel').classList.add('open');
+            document.getElementById('graphPanelOverlay').classList.add('active');
+
+            // Initialize graph with stored data if panel just opened
+            if (typeof currentGraphData !== 'undefined' && currentGraphData && !window._neo4jGraph) {
+                var container = document.getElementById('d3GraphContainer');
+                var placeholder = document.getElementById('graphPlaceholder');
+                if (container) container.style.display = 'block';
+                if (placeholder) placeholder.style.display = 'none';
+                setTimeout(function() {
+                    if (!window._neo4jGraph) {
+                        window._neo4jGraph = new Neo4jGraph('d3GraphContainer');
+                    }
+                    window._neo4jGraph.updateGraph(currentGraphData);
+                }, 100);
+            }
+        }
+        function closeGraphPanel() {
+            document.getElementById('graphPanel').classList.remove('open');
+            document.getElementById('graphPanelOverlay').classList.remove('active');
+        }
+
+        // Graph layout helpers (proxy to Neo4jGraph if available)
+        function resetGraphLayout() {
+            if (window._neo4jGraph) window._neo4jGraph.resetLayout();
+        }
+        function zoomGraphToFit() {
+            if (window._neo4jGraph) window._neo4jGraph.zoomToFit();
+        }
+        function exportGraphSVG() {
+            if (window._neo4jGraph) window._neo4jGraph.exportAsSVG();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            checkSystemStatus();
+            setInterval(checkSystemStatus, 30000);
+        });
+    </script>
+</body>
+</html>
