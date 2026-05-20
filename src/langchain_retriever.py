@@ -293,6 +293,122 @@ class Neo4jGraphRetriever(BaseRetriever):
                 })
         return rels
 
+    # ==================== 检索 + 可视化（合并接口） ====================
+
+    def search_with_graph(self, question: str) -> Dict[str, Any]:
+        """一次检索同时返回文本上下文和可视化图数据，避免重复调用 _retrieve_entities"""
+        entities = self._retrieve_entities(question)
+        if not entities:
+            return {
+                "context": "未在知识图谱中找到相关内容。",
+                "graph_data": {"nodes": [], "relationships": []},
+            }
+
+        entity_names = [e["name"] for e in entities]
+
+        # 文本上下文
+        qa_list = self._get_qa_for_entities(entity_names)
+        layers = self._get_layers_for_entities(entity_names)
+        context = self._build_context(entities, qa_list, layers)
+
+        # 可视化数据 — 基于已检索的实体扩展邻居
+        graph_data = self._build_graph_data(entities)
+
+        return {"context": context, "graph_data": graph_data}
+
+    def _build_graph_data(self, entities: List[Dict]) -> Dict[str, Any]:
+        """基于已检索实体构建可视化数据"""
+        graph_data: Dict[str, Any] = {"nodes": [], "relationships": []}
+        try:
+            core_entities = [e for e in entities if e.get("score", 1) >= 2]
+            if not core_entities:
+                core_entities = entities[:5]
+            core_names = [e["name"] for e in core_entities[:10]]
+
+            with self._driver.session() as session:
+                # 扩展邻居
+                neighbor_names = set()
+                for src_name in core_names:
+                    try:
+                        result = session.run("""
+                            MATCH (n {name: $src})-[r]-(neighbor)
+                            WHERE neighbor.name IS NOT NULL
+                              AND NOT neighbor.name IN $exclude
+                            RETURN DISTINCT neighbor.name as name,
+                                   labels(neighbor) as labels,
+                                   neighbor.description as description
+                            LIMIT $limit
+                        """, {"src": src_name, "exclude": core_names, "limit": 3})
+                        for record in result:
+                            nn = record["name"]
+                            if nn:
+                                neighbor_names.add(nn)
+                    except Exception as ex:
+                        logger.debug(f"获取 {src_name} 邻居失败: {ex}")
+
+                all_names = core_names + list(neighbor_names)
+
+                # 获取关系
+                relationships = []
+                if all_names:
+                    result = session.run("""
+                        MATCH (n1)-[r]->(n2)
+                        WHERE n1.name IN $names AND n2.name IN $names
+                        RETURN n1.name as start,
+                               type(r) as rel_type,
+                               n2.name as end
+                        LIMIT 25
+                    """, {"names": all_names})
+                    for record in result:
+                        relationships.append({
+                            "start": {"name": record["start"]},
+                            "end": {"name": record["end"]},
+                            "type": record["rel_type"]
+                        })
+
+                # 只保留有连接的节点
+                connected_names = set()
+                for rel in relationships:
+                    connected_names.add(rel["start"]["name"])
+                    connected_names.add(rel["end"]["name"])
+
+                name_to_entity = {e["name"]: e for e in entities}
+                nodes = []
+                for name in all_names:
+                    if name not in connected_names:
+                        continue
+                    if name in name_to_entity:
+                        e = name_to_entity[name]
+                        nodes.append({
+                            "name": name,
+                            "type": e.get("entity_type") or "Entity",
+                            "description": e.get("description") or "",
+                        })
+                    else:
+                        try:
+                            nr = session.run("""
+                                MATCH (n {name: $name})
+                                RETURN COALESCE(n.entity_type, labels(n)[0]) as type,
+                                       COALESCE(n.description, '') as description
+                                LIMIT 1
+                            """, {"name": name})
+                            rec = nr.single()
+                            nodes.append({
+                                "name": name,
+                                "type": rec["type"] if rec else "Node",
+                                "description": (rec["description"] or "") if rec else "",
+                            })
+                        except Exception:
+                            nodes.append({"name": name, "type": "Node", "description": ""})
+
+                graph_data["nodes"] = nodes[:20]
+                graph_data["relationships"] = relationships
+
+        except Exception as e:
+            logger.warning(f"构建可视化数据失败: {e}")
+
+        return graph_data
+
     # ==================== 可视化辅助 ====================
 
     def get_graph_data_for_visualization(self, question: str) -> Dict[str, Any]:

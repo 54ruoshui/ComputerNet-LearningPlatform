@@ -35,8 +35,9 @@ _retriever: Optional[Neo4jGraphRetriever] = None
 
 @tool
 def knowledge_search(query: str) -> str:
-    """搜索知识图谱，获取与网络知识相关的实体、关系和问答上下文。
+    """搜索知识图谱，获取与网络知识相关的实体、关系、问答上下文以及可视化数据。
     当用户询问计算机网络的概念、协议、设备或各层知识时，应优先使用此工具。
+    返回结果包含文本上下文和可视化图数据。
 
     Args:
         query: 搜索问题或关键词，如"TCP三次握手"、"CSMA/CD工作原理"
@@ -44,29 +45,10 @@ def knowledge_search(query: str) -> str:
     if _retriever is None:
         return "知识图谱检索器未初始化。"
     try:
-        docs = _retriever.invoke(query)
-        if not docs:
-            return "未在知识图谱中找到相关内容。"
-        return "\n\n".join(doc.page_content for doc in docs)
+        result = _retriever.search_with_graph(query)
+        return json.dumps(result, ensure_ascii=False)
     except Exception as e:
         return f"知识图谱检索失败: {e}"
-
-
-@tool
-def graph_visualize(query: str) -> str:
-    """获取知识图谱的可视化数据（节点和关系），用于展示实体间的连接关系。
-    当用户想了解某个主题涉及的实体及其关联时使用此工具。
-
-    Args:
-        query: 要可视化的主题或问题
-    """
-    if _retriever is None:
-        return json.dumps({"nodes": [], "relationships": []})
-    try:
-        data = _retriever.get_graph_data_for_visualization(query)
-        return json.dumps(data, ensure_ascii=False)
-    except Exception as e:
-        return json.dumps({"nodes": [], "relationships": [], "error": str(e)})
 
 
 @tool
@@ -163,7 +145,6 @@ class GraphRAGAgent:
         # 构建工具列表
         self.tools = [
             knowledge_search,
-            graph_visualize,
             graph_statistics,
             node_search,
             node_neighbors,
@@ -186,17 +167,15 @@ class GraphRAGAgent:
         return """你是一个计算机网络领域的资深专家和优秀教师。你可以使用一组知识图谱工具来回答用户关于计算机网络的问题。
 
 # 可用工具
-- **knowledge_search**: 搜索知识图谱获取实体、关系和问答上下文。
-- **graph_visualize**: 获取图谱可视化数据（节点和关系），用于展示实体间连接。
+- **knowledge_search**: 搜索知识图谱，同时获取实体/关系/问答上下文和可视化图数据。
 - **graph_statistics**: 获取知识图谱统计信息（实体数、关系数、各层数据）。
 - **node_search**: 按关键词搜索特定节点，查看节点基本信息。
 - **node_neighbors**: 获取某个节点的邻居，探索关联实体。
 
 # 工具使用策略
-1. 用户问事实性问题时，**必须先调用 knowledge_search** 获取知识图谱上下文。
-2. 回答完问题后，如果涉及具体实体和关系，调用 graph_visualize 获取可视化数据。
-3. 如果 knowledge_search 返回信息不足，可以用 node_search + node_neighbors 深入探索。
-4. 用户问图谱本身的规模和内容时，使用 graph_statistics。
+1. 用户问事实性问题时，**必须调用 knowledge_search** 获取知识图谱上下文和可视化数据。
+2. 如果 knowledge_search 返回信息不足，可以用 node_search + node_neighbors 深入探索。
+3. 用户问图谱本身的规模和内容时，使用 graph_statistics。
 
 # 回答要求（非常重要）
 1. **详细充分**：回答应当详尽充实，每个知识点充分展开解释，不少于500字
@@ -245,13 +224,19 @@ class GraphRAGAgent:
             context_length = 0
             for msg in messages:
                 if isinstance(msg, ToolMessage):
-                    if msg.name == "graph_visualize":
+                    if msg.name == "knowledge_search":
                         try:
-                            graph_data = json.loads(msg.content)
+                            parsed = json.loads(msg.content)
+                            # 合并工具返回 {"context": ..., "graph_data": ...}
+                            if isinstance(parsed, dict) and "graph_data" in parsed:
+                                gd = parsed["graph_data"]
+                                if gd.get("nodes"):
+                                    graph_data = gd
+                                context_length += len(parsed.get("context", ""))
+                            else:
+                                context_length += len(msg.content) if msg.content else 0
                         except (json.JSONDecodeError, TypeError):
-                            pass
-                    elif msg.name == "knowledge_search":
-                        context_length += len(msg.content) if msg.content else 0
+                            context_length += len(msg.content) if msg.content else 0
 
             elapsed = time.time() - start_time
 
