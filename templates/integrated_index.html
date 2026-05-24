@@ -36,7 +36,16 @@
                 <span>会话记忆中</span>
             </div>
 
-            <div class="sidebar-section">
+            <div class="sidebar-tabs">
+                <button class="sidebar-tab active" onclick="switchSidebarTab('history')" id="tabHistory">
+                    <i class="fas fa-clock-rotate-left"></i> 历史
+                </button>
+                <button class="sidebar-tab" onclick="switchSidebarTab('knowledge')" id="tabKnowledge">
+                    <i class="fas fa-book-open"></i> 知识点
+                </button>
+            </div>
+
+            <div class="sidebar-section" id="historySection">
                 <div class="section-header">
                     <span>历史记录</span>
                     <button class="btn-ghost btn-sm" onclick="clearHistory()" title="清空历史">
@@ -47,6 +56,23 @@
                     <div class="history-empty" id="historyContainer">
                         <i class="far fa-comment-dots"></i>
                         <span>暂无记录</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="knowledge-panel" id="knowledgePanel" style="display:none;">
+                <div class="knowledge-summary">
+                    <span class="mastery-stat">
+                        <span class="mastery-count" id="masteredCount">0</span>/<span id="totalCount">0</span> 已掌握
+                    </span>
+                    <div class="mastery-bar">
+                        <div class="mastery-bar-fill" id="masteryBarFill" style="width:0%"></div>
+                    </div>
+                </div>
+                <div class="knowledge-layers" id="knowledgeLayers">
+                    <div class="knowledge-empty">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span>加载知识点...</span>
                     </div>
                 </div>
             </div>

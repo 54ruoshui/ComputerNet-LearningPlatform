@@ -1,0 +1,23 @@
+{
+  "computer_network_qa": {
+    "file_name": "datasets-T1q_4mxIfEbg-sharegpt-2026-03-17.json",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages"
+    }
+  },
+  "computer_network_multiturn": {
+    "file_name": "multi-turn-conversations-T1q_4mxIfEbg-2026-03-17.json",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages"
+    }
+  },
+  "computer_network_all": {
+    "file_name": "merged_dataset.json",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages"
+    }
+  }
+}

@@ -36,3 +36,5 @@ graphrag_checkpoints.db
 
 # Generated
 quality_metrics_export.json
+ 
+requirements/

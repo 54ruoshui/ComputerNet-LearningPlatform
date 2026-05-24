@@ -12,6 +12,11 @@ let currentGraphData = null;
 let currentQuestion = null;
 let currentImageUrl = null;
 
+// Mastery state
+let allEntities = {};
+let masteryState = {};
+let knowledgeLoaded = false;
+
 // ==================== Speech Recognition ====================
 
 function initSpeechRecognition() {
@@ -654,9 +659,26 @@ async function submitQuery() {
                         '</button>';
                 }
 
+                // Entity tags from extracted knowledge points
+                var entityTagsHtml = '';
+                if (data.extracted_entities && data.extracted_entities.length > 0) {
+                    entityTagsHtml = '<div class="entity-tags">';
+                    entityTagsHtml += '<span class="entity-tags-label"><i class="fas fa-tags"></i> 相关知识点：</span>';
+                    data.extracted_entities.forEach(function(entityName) {
+                        var isMastered = masteryState[entityName];
+                        var cls = isMastered ? 'entity-tag mastered' : 'entity-tag unmastered';
+                        var icon = isMastered ? '<i class="fas fa-check-circle"></i>' : '<i class="far fa-circle"></i>';
+                        var safeName = entityName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        entityTagsHtml += '<button class="' + cls + '" data-entity="' + escapeHtml(entityName) + '" onclick="toggleEntityMastery(\'' + safeName + '\')">' +
+                            icon + ' ' + escapeHtml(entityName) + '</button>';
+                    });
+                    entityTagsHtml += '</div>';
+                }
+
                 aiMsg.innerHTML = '<div class="msg-avatar"><i class="fas fa-sparkles"></i></div>' +
                     '<div class="msg-bubble msg-bubble-ai">' +
                     '<div class="msg-content">' + badgesHtml + formattedAnswer + '</div>' +
+                    entityTagsHtml +
                     graphBtnHtml +
                     '</div>';
 
@@ -671,6 +693,11 @@ async function submitQuery() {
             }
 
             addToHistory(data.question, data.answer, data.processing_time);
+
+            // Refresh mastery state after query
+            if (currentSessionId && data.extracted_entities && data.extracted_entities.length > 0) {
+                loadMasteryState();
+            }
 
         } else {
             throw new Error(data.error || '查询失败');
@@ -719,6 +746,7 @@ async function startNewSession() {
     var welcome = document.getElementById('welcomeBlock');
     if (welcome) welcome.style.display = '';
 
+    loadMasteryState();
     showMessage('已开始新会话', 'info');
 }
 
@@ -882,6 +910,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadGraphStats();
     setupSearchSuggestions();
     loadSessions();
+    loadKnowledgeDirectory();
     checkBrowserCompatibility();
 });
 
@@ -912,3 +941,166 @@ window.loadSessions = loadSessions;
 window.deleteCurrentSession = deleteCurrentSession;
 window._expandNodeNeighbors = _expandNodeNeighbors;
 window.exportSubgraph = exportSubgraph;
+window.toggleEntityMastery = toggleEntityMastery;
+window.switchSidebarTab = switchSidebarTab;
+window.toggleLayerSection = toggleLayerSection;
+
+
+// ==================== Knowledge Mastery ====================
+
+async function loadKnowledgeDirectory() {
+    try {
+        var response = await fetch('/api/entities');
+        var data = await response.json();
+        allEntities = data.entities || {};
+        document.getElementById('totalCount').textContent = data.total || 0;
+        knowledgeLoaded = true;
+        renderKnowledgeDirectory();
+    } catch (error) {
+        console.error('加载知识点目录失败:', error);
+    }
+}
+
+async function loadMasteryState() {
+    if (!currentSessionId) return;
+    try {
+        var response = await fetch('/api/mastery/' + currentSessionId);
+        var data = await response.json();
+        masteryState = data.mastery || {};
+        renderKnowledgeDirectory();
+    } catch (error) {
+        console.error('加载掌握状态失败:', error);
+    }
+}
+
+async function toggleEntityMastery(entityName) {
+    if (!currentSessionId) {
+        showMessage('请先开始一个会话', 'warning');
+        return;
+    }
+    var newState = !masteryState[entityName];
+    try {
+        await fetch('/api/mastery', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: currentSessionId,
+                entity_name: entityName,
+                mastered: newState
+            })
+        });
+        masteryState[entityName] = newState;
+        renderKnowledgeDirectory();
+        updateEntityTagInChat(entityName, newState);
+    } catch (error) {
+        showMessage('更新掌握状态失败', 'danger');
+    }
+}
+
+function renderKnowledgeDirectory() {
+    var container = document.getElementById('knowledgeLayers');
+    if (!container || !knowledgeLoaded) return;
+
+    container.innerHTML = '';
+    var layerOrder = ['物理层', '数据链路层', '网络层', '运输层', '应用层'];
+
+    layerOrder.forEach(function(layerName) {
+        var entities = allEntities[layerName] || [];
+        if (!entities.length) return;
+
+        var section = document.createElement('div');
+        section.className = 'knowledge-layer';
+
+        var masteredCount = entities.filter(function(e) {
+            return masteryState[e.name];
+        }).length;
+
+        var entitiesHtml = entities.map(function(e) {
+            var m = masteryState[e.name];
+            var safeName = e.name.replace(/'/g, "\\'");
+            return '<div class="entity-item ' + (m ? 'mastered' : 'unmastered') +
+                '" onclick="toggleEntityMastery(\'' + safeName + '\')">' +
+                '<span class="entity-status"><i class="fas ' + (m ? 'fa-check-circle' : 'fa-circle') + '"></i></span>' +
+                '<span class="entity-name">' + escapeHtml(e.name) + '</span>' +
+                '<span class="entity-type-badge">' + e.entity_type + '</span>' +
+                '</div>';
+        }).join('');
+
+        section.innerHTML =
+            '<div class="layer-header" onclick="toggleLayerSection(this)">' +
+            '  <span class="layer-name">' + layerName + '</span>' +
+            '  <span class="layer-progress">' + masteredCount + '/' + entities.length + '</span>' +
+            '  <i class="fas fa-chevron-down"></i>' +
+            '</div>' +
+            '<div class="layer-entities">' + entitiesHtml + '</div>';
+
+        container.appendChild(section);
+    });
+
+    updateMasterySummary();
+}
+
+function updateMasterySummary() {
+    var total = 0;
+    var mastered = 0;
+    Object.keys(allEntities).forEach(function(layer) {
+        allEntities[layer].forEach(function(e) {
+            total++;
+            if (masteryState[e.name]) mastered++;
+        });
+    });
+
+    var countEl = document.getElementById('masteredCount');
+    var totalEl = document.getElementById('totalCount');
+    var fillEl = document.getElementById('masteryBarFill');
+    if (countEl) countEl.textContent = mastered;
+    if (totalEl) totalEl.textContent = total;
+    if (fillEl) fillEl.style.width = (total > 0 ? (mastered / total * 100) : 0) + '%';
+}
+
+function updateEntityTagInChat(entityName, mastered) {
+    var tags = document.querySelectorAll('.entity-tag');
+    tags.forEach(function(tag) {
+        if (tag.getAttribute('data-entity') === entityName) {
+            tag.className = 'entity-tag ' + (mastered ? 'mastered' : 'unmastered');
+            tag.setAttribute('data-entity', entityName);
+            var icon = tag.querySelector('i');
+            if (icon) {
+                icon.className = mastered ? 'fas fa-check-circle' : 'far fa-circle';
+            }
+        }
+    });
+}
+
+function switchSidebarTab(tab) {
+    var historySection = document.getElementById('historySection');
+    var knowledgePanel = document.getElementById('knowledgePanel');
+    var tabHistory = document.getElementById('tabHistory');
+    var tabKnowledge = document.getElementById('tabKnowledge');
+
+    if (tab === 'history') {
+        historySection.style.display = '';
+        knowledgePanel.style.display = 'none';
+        tabHistory.classList.add('active');
+        tabKnowledge.classList.remove('active');
+    } else {
+        historySection.style.display = 'none';
+        knowledgePanel.style.display = 'flex';
+        tabHistory.classList.remove('active');
+        tabKnowledge.classList.add('active');
+        if (!knowledgeLoaded) loadKnowledgeDirectory();
+        if (currentSessionId && Object.keys(masteryState).length === 0) loadMasteryState();
+    }
+}
+
+function toggleLayerSection(header) {
+    var entities = header.nextElementSibling;
+    var icon = header.querySelector('i');
+    if (entities.style.display === 'none') {
+        entities.style.display = '';
+        icon.className = 'fas fa-chevron-down';
+    } else {
+        entities.style.display = 'none';
+        icon.className = 'fas fa-chevron-right';
+    }
+}

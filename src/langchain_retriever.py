@@ -2,22 +2,29 @@
 LangChain Neo4j 自定义检索器（层级知识图谱版本）
 
 将 Neo4j Cypher 查询封装为 LangChain BaseRetriever，返回 Document 对象。
-支持关键词匹配 + 向量语义检索的混合检索策略。
+基于向量语义检索 + Neo4j 知识图谱。
 """
 
-import re
 import json
+import os
 import logging
 from typing import List, Dict, Any, Optional
 
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
+from langchain_openai import ChatOpenAI
 from neo4j import GraphDatabase
+from pydantic import BaseModel, Field
 
 from src.embedding_manager import EmbeddingManager
 
 logger = logging.getLogger(__name__)
+
+
+class KeywordsOutput(BaseModel):
+    """LLM 关键词提取的结构化输出"""
+    keywords: List[str] = Field(description="从问题中提取的3-5个计算机网络核心关键词")
 
 
 class Neo4jGraphRetriever(BaseRetriever):
@@ -45,6 +52,13 @@ class Neo4jGraphRetriever(BaseRetriever):
         else:
             self._self_created_driver = False
         self._embedding_mgr = EmbeddingManager()
+        self._llm = ChatOpenAI(
+            base_url=os.getenv("ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
+            api_key=os.getenv("ZHIPU_API_KEY", ""),
+            model=os.getenv("ZHIPU_MODEL", "glm-4-flash"),
+            temperature=0,
+            max_tokens=100,
+        ).with_structured_output(KeywordsOutput)
 
     def close(self):
         if getattr(self, '_self_created_driver', False) and self._driver:
@@ -77,36 +91,31 @@ class Neo4jGraphRetriever(BaseRetriever):
 
     # ==================== 实体检索 ====================
 
+    def _extract_keywords_with_llm(self, question: str) -> str:
+        """用 LLM 从问题中提取核心关键词，返回拼接后的字符串"""
+        try:
+            result = self._llm.invoke(question)
+            keywords = " ".join(result.keywords)
+            if keywords.strip():
+                logger.info(f"LLM 提取关键词: {question} -> {keywords}")
+                return keywords
+        except Exception as e:
+            logger.warning(f"LLM 关键词提取失败，使用原始问题: {e}")
+        return question
+
     def _retrieve_entities(self, question: str) -> List[Dict]:
-        """混合检索：语义向量检索 + 关键词匹配"""
-        entities = []
-        seen_names = set()
-
-        # 语义检索
-        semantic_results = self._semantic_search(question, top_k=10)
-        for item in semantic_results:
-            name = item["name"]
-            if name and name not in seen_names:
-                entities.append(item)
-                seen_names.add(name)
-
-        # 关键词检索补充
-        keyword_results = self._keyword_search(question)
-        for item in keyword_results:
-            name = item["name"]
-            if name and name not in seen_names:
-                entities.append(item)
-                seen_names.add(name)
-
+        """向量语义检索"""
+        entities = self._semantic_search(question, top_k=self.max_entities)
         entities.sort(key=lambda e: e["score"], reverse=True)
         return entities[:self.max_entities]
 
     def _semantic_search(self, question: str, top_k: int = 10) -> List[Dict]:
-        """向量语义检索"""
+        """向量语义检索：先提取关键词再向量化"""
         if not self._embedding_mgr.ready:
             return []
 
-        query_embedding = self._embedding_mgr.embed_query(question)
+        query_text = self._extract_keywords_with_llm(question)
+        query_embedding = self._embedding_mgr.embed_query(query_text)
         if not query_embedding:
             return []
 
@@ -134,54 +143,6 @@ class Neo4jGraphRetriever(BaseRetriever):
                         })
         except Exception as e:
             logger.warning(f"语义检索失败: {e}")
-
-        return entities
-
-    def _keyword_search(self, question: str) -> List[Dict]:
-        """关键词匹配检索"""
-        entities = []
-        keywords = self._extract_keywords(question)
-        seen_names = set()
-
-        with self._driver.session() as session:
-            for keyword in keywords[:5]:
-                cypher = """
-                MATCH (e:Entity)
-                WHERE e.name = $keyword
-                   OR e.name CONTAINS $keyword
-                   OR e.description CONTAINS $keyword
-                RETURN e.name as name,
-                       e.entity_type as entity_type,
-                       e.description as description,
-                       e.layer as layer,
-                       CASE
-                           WHEN e.name = $keyword THEN 3
-                           WHEN e.name CONTAINS $keyword THEN 2
-                           ELSE 1
-                       END as score
-                ORDER BY score DESC
-                LIMIT $limit
-                """
-                result = session.run(cypher, {
-                    "keyword": keyword,
-                    "limit": self.max_entities // max(len(keywords[:5]), 1) + 1
-                })
-                for record in result:
-                    name = record["name"]
-                    if not name or name in seen_names:
-                        if name in seen_names:
-                            for existing in entities:
-                                if existing["name"] == name:
-                                    existing["score"] = max(existing["score"], record["score"])
-                        continue
-                    entities.append({
-                        "name": name,
-                        "entity_type": record["entity_type"] or "Unknown",
-                        "description": record["description"] or "",
-                        "layer": record["layer"] or "",
-                        "score": record["score"]
-                    })
-                    seen_names.add(name)
 
         return entities
 
@@ -320,7 +281,7 @@ class Neo4jGraphRetriever(BaseRetriever):
         """基于已检索实体构建可视化数据"""
         graph_data: Dict[str, Any] = {"nodes": [], "relationships": []}
         try:
-            core_entities = [e for e in entities if e.get("score", 1) >= 2]
+            core_entities = [e for e in entities if e.get("score", 0) >= 1.0]
             if not core_entities:
                 core_entities = entities[:5]
             core_names = [e["name"] for e in core_entities[:10]]
@@ -420,7 +381,7 @@ class Neo4jGraphRetriever(BaseRetriever):
                 return graph_data
 
             with self._driver.session() as session:
-                core_entities = [e for e in entities if e.get("score", 1) >= 2]
+                core_entities = [e for e in entities if e.get("score", 0) >= 1.0]
                 if not core_entities:
                     core_entities = entities[:5]
 
@@ -567,30 +528,11 @@ class Neo4jGraphRetriever(BaseRetriever):
     # ==================== Web API 辅助查询 ====================
 
     def keyword_search(self, query: str, limit: int = 10) -> List[Dict]:
-        safe_query = re.sub(r'[^a-zA-Z0-9一-龥]', '', query)
-        if not safe_query:
+        """基于向量语义的节点搜索（替代原有关键词正则匹配）"""
+        if not query.strip():
             return []
-
-        cypher = """
-        MATCH (n)
-        WHERE (n.name IS NOT NULL AND n.name =~ $query_regex)
-           OR (n.description IS NOT NULL AND n.description =~ $query_regex)
-        RETURN n, labels(n) as types
-        LIMIT $limit
-        """
-        query_regex = f"(?i).*{safe_query}.*"
-        with self._driver.session() as session:
-            result = session.run(cypher, {"query_regex": query_regex, "limit": limit})
-            nodes = []
-            for record in result:
-                node_data = dict(record["n"])
-                types = record["types"]
-                if isinstance(types, list) and types:
-                    node_data["type"] = types[0]
-                else:
-                    node_data["type"] = str(types) if types else "Unknown"
-                nodes.append(node_data)
-            return nodes
+        results = self._semantic_search(query, top_k=limit)
+        return results
 
     def get_neighbors(self, node_name: str, depth: int = 2) -> List[Dict]:
         if depth == 1:
@@ -647,25 +589,3 @@ class Neo4jGraphRetriever(BaseRetriever):
                 })
             return {"nodes": nodes, "relationships": relationships}
 
-    # ==================== 工具方法 ====================
-
-    @staticmethod
-    def _extract_keywords(question: str) -> List[str]:
-        stop_words = {'的', '是', '在', '有', '和', '与', '或', '但', '如果', '那么',
-                     '因为', '所以', '什么', '如何', '为什么', '请', '了', '吗', '呢'}
-        words = re.findall(r'[a-zA-Z]+|[一-龥]+', question)
-        keywords = []
-        for word in words:
-            if word.lower() not in stop_words and len(word) > 1:
-                keywords.append(word)
-
-        network_terms = ['tcp', 'udp', 'http', 'https', 'vlan', 'ip', 'dns', 'nat',
-                        'ospf', 'bgp', 'stp', 'vpn', '路由', '交换', '防火墙',
-                        'arp', 'icmp', 'dhcp', 'rip', 'ipsec', 'quic', 'sctp',
-                        'igmp', 'isis', 'eigrp', 'vrrp', 'rstp', 'mstp', 'lacp',
-                        'mqtt', 'snmp', 'ntp', 'ftp', 'smtp', 'ssh', 'tls',
-                        'websocket', 'ppp', 'wifi', 'poe', 'cidr', 'ttl', 'mss']
-        for term in network_terms:
-            if term in question.lower() and term not in keywords:
-                keywords.append(term)
-        return keywords

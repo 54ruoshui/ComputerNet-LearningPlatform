@@ -1,0 +1,45 @@
+### 模型配置
+model_name_or_path: Qwen/Qwen2.5-7B-Instruct
+
+### 微调方法
+stage: sft
+finetuning_type: lora
+lora_rank: 64
+lora_alpha: 128
+lora_target: q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj
+lora_dropout: 0.05
+
+### 数据集
+dataset: computer_network_all
+template: qwen
+cutoff_len: 4096
+max_samples: 10000
+overwrite_cache: true
+preprocessing_num_workers: 8
+
+### 训练超参数
+output_dir: saves/qwen2.5-7b-lora-cn-network
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+learning_rate: 1.0e-4
+num_train_epochs: 3.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+
+### 优化配置
+gradient_checkpointing: true
+optim: adamw_torch
+logging_steps: 10
+save_steps: 500
+save_total_limit: 3
+
+### 评估
+val_size: 0.05
+per_device_eval_batch_size: 1
+eval_strategy: steps
+eval_steps: 500
+
+### 其他
+seed: 42
+report_to: tensorboard

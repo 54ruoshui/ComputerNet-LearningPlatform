@@ -17,7 +17,7 @@ def main():
     parser.add_argument('--mode', choices=['web', 'cli', 'test'], default='web',
                       help='运行模式: web(网页界面), cli(命令行), test(测试)')
     parser.add_argument('--host', default='0.0.0.0', help='Web服务器主机地址')
-    parser.add_argument('--port', type=int, default=5000, help='Web服务器端口')
+    parser.add_argument('--port', type=int, default=5001, help='Web服务器端口')
     parser.add_argument('--debug', action='store_true', help='启用调试模式')
 
     args = parser.parse_args()

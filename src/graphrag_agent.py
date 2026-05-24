@@ -15,7 +15,7 @@ import time
 from typing import List, Dict, Any, Optional
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
@@ -197,6 +197,7 @@ class GraphRAGAgent:
         self,
         question: str,
         session_id: Optional[str] = None,
+        mastery_context: str = "",
     ) -> Dict[str, Any]:
         start_time = time.time()
 
@@ -206,7 +207,11 @@ class GraphRAGAgent:
         self._sessions.add(session_id)
         config = {"configurable": {"thread_id": session_id}}
 
-        input_messages = {"messages": [HumanMessage(content=question)]}
+        messages = []
+        if mastery_context:
+            messages.append(SystemMessage(content=mastery_context))
+        messages.append(HumanMessage(content=question))
+        input_messages = {"messages": messages}
 
         try:
             result = self.agent.invoke(input_messages, config)
