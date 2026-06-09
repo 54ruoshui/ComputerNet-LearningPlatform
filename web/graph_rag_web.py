@@ -4,7 +4,6 @@ GraphRAG Web 界面
 """
 
 import os
-import re
 import sys
 import uuid
 from datetime import datetime
@@ -21,7 +20,6 @@ from src.exceptions import GraphRAGError, ConfigError, ConnectionError_
 from src.logging_config import setup_logging, new_request_id, request_id_var, session_id_var
 from src.settings import get_settings
 
-# 添加项目根目录到 Python 路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 初始化日志
@@ -46,14 +44,12 @@ app.add_middleware(APIKeyMiddleware)
 
 @app.middleware("http")
 async def inject_request_id(request: Request, call_next):
-    """每个请求注入 request_id 并记录到上下文"""
     rid = new_request_id()
     response = await call_next(request)
     response.headers["X-Request-ID"] = rid
     return response
 
 
-# 静态文件和模板
 app.mount("/static", StaticFiles(directory=static_folder), name="static")
 templates = Jinja2Templates(directory=template_folder)
 
@@ -63,8 +59,8 @@ app.mount("/generated_images", StaticFiles(directory=generated_images_dir), name
 # ==================== 全局实例 ====================
 langgraph_engine = None
 image_generator = None
-mastery_tracker = None
-_all_entity_names: Optional[List[str]] = None
+entity_service = None
+mastery_service = None
 
 
 # ==================== Pydantic 请求模型（带校验） ====================
@@ -98,7 +94,6 @@ class MasteryBatchRequest(BaseModel):
 
 @app.exception_handler(GraphRAGError)
 async def graphrag_error_handler(request: Request, exc: GraphRAGError):
-    """统一处理 GraphRAG 自定义异常"""
     status_map = {
         ConfigError: 500,
         ConnectionError_: 503,
@@ -123,13 +118,15 @@ async def graphrag_error_handler(request: Request, exc: GraphRAGError):
 # ==================== 初始化函数 ====================
 
 def init_langgraph_engine():
-    global langgraph_engine
+    global langgraph_engine, entity_service
     try:
         logger.info("初始化 GraphRAG ReAct Agent...")
         from src.langchain_config import LangGraphRAGConfig
         from src.graphrag_agent import GraphRAGAgent
+        from src.services.entity_service import EntityService
         config = LangGraphRAGConfig()
         langgraph_engine = GraphRAGAgent(config)
+        entity_service = EntityService(langgraph_engine.driver)
         logger.info("GraphRAG ReAct Agent 初始化完成")
         return langgraph_engine
     except GraphRAGError:
@@ -157,45 +154,27 @@ def init_image_generator():
         return None
 
 
-def _require_engine():
-    """确保引擎已初始化，否则返回 503"""
-    if not langgraph_engine:
-        raise HTTPException(status_code=503, detail="LangGraph 引擎未初始化，请检查 Neo4j 和 API 配置")
-    return langgraph_engine
-
-
 def init_mastery_tracker():
-    global mastery_tracker
+    global mastery_service
     try:
         logger.info("初始化掌握追踪器...")
         from src.mastery_tracker import MasteryTracker
+        from src.services.mastery_service import MasteryService
         db_path = os.path.join(project_root, "mastery.db")
-        mastery_tracker = MasteryTracker(db_path)
+        tracker = MasteryTracker(db_path)
+        mastery_service = MasteryService(tracker)
         logger.info("掌握追踪器初始化完成")
-        return mastery_tracker
+        return tracker
     except Exception as e:
         logger.error("掌握追踪器初始化失败", error=str(e))
-        mastery_tracker = None
+        mastery_service = MasteryService(None)
         return None
 
 
-def _get_all_entity_names() -> List[str]:
-    global _all_entity_names
-    if _all_entity_names is not None:
-        return _all_entity_names
-    engine = _require_engine()
-    with engine.driver.session() as session:
-        result = session.run("MATCH (e:Entity) WHERE e.name IS NOT NULL RETURN e.name AS name")
-        _all_entity_names = sorted([r["name"] for r in result], key=len, reverse=True)
-    return _all_entity_names
-
-
-def _extract_entities_from_text(text: str, entity_names: List[str]) -> List[str]:
-    found = []
-    for name in entity_names:
-        if re.search(r'(?<![a-zA-Z0-9])' + re.escape(name) + r'(?![a-zA-Z0-9])', text):
-            found.append(name)
-    return found
+def _require_engine():
+    if not langgraph_engine:
+        raise HTTPException(status_code=503, detail="LangGraph 引擎未初始化，请检查 Neo4j 和 API 配置")
+    return langgraph_engine
 
 
 # ==================== 启动/关闭事件 ====================
@@ -214,7 +193,7 @@ def on_startup():
 @app.on_event("shutdown")
 def on_shutdown():
     logger.info("正在清理资源...")
-    for component in [mastery_tracker, langgraph_engine]:
+    for component in [mastery_service, langgraph_engine]:
         if component and hasattr(component, 'close'):
             try:
                 component.close()
@@ -239,25 +218,15 @@ async def favicon():
 
 @app.post("/api/query")
 async def query(req: QueryRequest):
-    """处理查询请求 — LangGraph 引擎（带会话记忆）"""
     engine = _require_engine()
     try:
         if req.session_id:
             session_id_var.set(req.session_id)
         logger.info("LangGraph 查询", session_id=req.session_id, question=req.question[:100])
 
-        # 构建掌握上下文用于个性化回答
         mastery_context = ""
-        if req.session_id and mastery_tracker:
-            summary = mastery_tracker.get_mastery_summary(req.session_id)
-            if summary and summary.get("total", 0) > 0:
-                mastered_list = summary.get("mastered_names", [])[:15]
-                unmastered_list = summary.get("unmastered_names", [])[:15]
-                mastery_context = (
-                    f"【学生知识掌握状态】已掌握：{'、'.join(mastered_list)}。"
-                    f"未掌握：{'、'.join(unmastered_list)}。"
-                    f"请在回答时对未掌握的知识点做更详细的解释。"
-                )
+        if req.session_id and mastery_service:
+            mastery_context = mastery_service.build_mastery_context(req.session_id)
 
         response = engine.query(
             req.question,
@@ -273,12 +242,11 @@ async def query(req: QueryRequest):
             "session_id": response.get("session_id"),
         }
 
-        # 提取问答中涉及的知识点实体
         try:
-            entity_names = _get_all_entity_names()
-            extracted = _extract_entities_from_text(
+            entity_names = entity_service.get_all_entity_names() if entity_service else []
+            extracted = entity_service.extract_entities_from_text(
                 req.question + " " + result["answer"], entity_names
-            )
+            ) if entity_service else []
             result["extracted_entities"] = extracted[:10]
         except Exception:
             result["extracted_entities"] = []
@@ -348,26 +316,7 @@ async def delete_session(session_id: str):
 async def get_all_entities():
     engine = _require_engine()
     try:
-        with engine.driver.session() as session:
-            result = session.run("""
-                MATCH (l:Layer)-[:CONTAINS]->(e:Entity)
-                RETURN l.name AS layer, l.layer_number AS layer_num,
-                       e.name AS name, e.entity_type AS entity_type, e.description AS description
-                ORDER BY l.layer_number, e.entity_type, e.name
-            """)
-            entities_by_layer: Dict = {}
-            total = 0
-            for record in result:
-                layer = record["layer"]
-                if layer not in entities_by_layer:
-                    entities_by_layer[layer] = []
-                entities_by_layer[layer].append({
-                    "name": record["name"],
-                    "entity_type": record["entity_type"],
-                    "description": record["description"] or "",
-                })
-                total += 1
-        return {"entities": entities_by_layer, "total": total}
+        return entity_service.get_entities_by_layer()
     except Exception as e:
         logger.error("获取实体列表失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
@@ -375,27 +324,24 @@ async def get_all_entities():
 
 @app.get("/api/mastery/{session_id}")
 async def get_mastery(session_id: str):
-    if not mastery_tracker:
+    if not mastery_service or not mastery_service.available:
         raise HTTPException(status_code=503, detail="掌握追踪器未初始化")
-    mastery = mastery_tracker.get_mastery(session_id)
-    summary = mastery_tracker.get_mastery_summary(session_id)
-    return {"mastery": mastery, "summary": summary}
+    return mastery_service.get_mastery(session_id)
 
 
 @app.post("/api/mastery")
 async def set_mastery(req: MasteryRequest):
-    if not mastery_tracker:
+    if not mastery_service or not mastery_service.available:
         raise HTTPException(status_code=503, detail="掌握追踪器未初始化")
-    mastery_tracker.set_mastery(req.session_id, req.entity_name, req.mastered)
+    mastery_service.set_mastery(req.session_id, req.entity_name, req.mastered)
     return {"success": True}
 
 
 @app.post("/api/mastery/batch")
 async def set_mastery_batch(req: MasteryBatchRequest):
-    if not mastery_tracker:
+    if not mastery_service or not mastery_service.available:
         raise HTTPException(status_code=503, detail="掌握追踪器未初始化")
-    for item in req.entities:
-        mastery_tracker.set_mastery(req.session_id, item["name"], item["mastered"])
+    mastery_service.set_mastery_batch(req.session_id, req.entities)
     return {"success": True}
 
 
@@ -421,7 +367,7 @@ async def get_config():
 async def graph_stats():
     engine = _require_engine()
     try:
-        return engine.get_stats()
+        return engine.stats_service.get_stats()
     except Exception as e:
         logger.error("获取统计信息失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
@@ -431,7 +377,7 @@ async def graph_stats():
 async def node_neighbors(node_name: str):
     engine = _require_engine()
     try:
-        neighbors = engine.retriever.get_neighbors(node_name, depth=2)
+        neighbors = engine.entity_retriever.get_neighbors(node_name)
         return {"neighbors": neighbors}
     except Exception as e:
         logger.error("获取节点邻居失败", error=str(e))
@@ -441,10 +387,8 @@ async def node_neighbors(node_name: str):
 @app.get("/api/search_nodes")
 async def search_nodes(q: str = ""):
     engine = _require_engine()
-    if not q.strip():
-        return {"nodes": []}
     try:
-        nodes = engine.retriever.keyword_search(q, limit=20)
+        nodes = engine.entity_retriever.keyword_search(q, limit=20) if q else []
         return {"nodes": nodes}
     except Exception as e:
         logger.error("搜索节点失败", error=str(e))
@@ -455,7 +399,7 @@ async def search_nodes(q: str = ""):
 async def export_graph(req: ExportRequest):
     engine = _require_engine()
     try:
-        graph_data = engine.retriever.get_subgraph_by_query(req.query, limit=50)
+        graph_data = engine.entity_retriever.get_subgraph_by_query(req.query, limit=50)
         return {"graph_data": graph_data, "export_time": datetime.now().isoformat()}
     except Exception as e:
         logger.error("导出图谱失败", error=str(e))
@@ -473,7 +417,6 @@ async def health_check():
 
 @app.post("/api/generate_image")
 async def generate_image(req: GenerateImageRequest):
-    """Graphviz 生成知识图谱可视化图片"""
     global image_generator
     if not image_generator:
         image_generator = init_image_generator()

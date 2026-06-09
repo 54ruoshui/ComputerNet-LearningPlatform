@@ -14,26 +14,26 @@
 
 ---
 
-## 第三阶段：测试（优先级高）
+## 第三阶段：测试（优先级高） ✅
 
-- [ ] 搭建 pytest 框架，创建 `tests/` 目录
-- [ ] 单元测试：`src/embedding_manager.py`（mock DashScope API）
-- [ ] 单元测试：`src/langchain_retriever.py`（mock Neo4j driver）
-- [ ] 单元测试：`src/graphrag_agent.py`（mock LLM，验证工具调用）
-- [ ] 单元测试：`src/settings.py`（必填字段缺失、校验规则）
-- [ ] 单元测试：`web/middleware.py`（API Key 白名单/拦截）
-- [ ] 集成测试：FastAPI 端到端（httpx + pytest-asyncio）
-- [ ] 在 GitHub Actions 或本地 CI 中集成测试运行
+- [x] 搭建 pytest 框架，创建 `tests/` 目录
+- [x] 单元测试：`src/embedding_manager.py`（mock DashScope API）
+- [x] 单元测试：`src/langchain_retriever.py`（mock Neo4j driver）
+- [x] 单元测试：`src/graphrag_agent.py`（mock LLM，验证工具调用）
+- [x] 单元测试：`src/settings.py`（必填字段缺失、校验规则）
+- [x] 单元测试：`web/middleware.py`（API Key 白名单/拦截）
+- [x] 集成测试：FastAPI 端到端（httpx + pytest-asyncio）
+- [x] 在 GitHub Actions 或本地 CI 中集成测试运行
 
-## 第四阶段：架构拆分
+## 第四阶段：架构拆分 ✅
 
-- [ ] `Neo4jGraphRetriever` 拆分为：
+- [x] `Neo4jGraphRetriever` 拆分为：
   - `EntityRetriever`（语义+关键词检索）
   - `GraphStatsService`（统计）
   - `GraphVisualizationService`（可视化数据）
-- [ ] 干掉全局变量 `_retriever`，改为依赖注入或类属性
-- [ ] `web/graph_rag_web.py` 拆分：抽取 service 层，隔离业务逻辑和路由
-- [ ] `langchain_retriever.py` 里的 LLM 关键词提取单独抽出（当前 with_structured_output 和 glm-4-flash 不兼容，返回长文本而非 JSON）
+- [x] 干掉全局变量 `_retriever`，改为依赖注入或类属性
+- [x] `web/graph_rag_web.py` 拆分：抽取 service 层，隔离业务逻辑和路由
+- [x] `langchain_retriever.py` 里的 LLM 关键词提取单独抽出（当前 with_structured_output 和 glm-4-flash 不兼容，返回长文本而非 JSON）
 
 ## 第五阶段：DevOps
 
@@ -44,8 +44,8 @@
 
 ## 已知问题
 
-- [ ] `glm-4-flash` 的 `with_structured_output` 返回长文本而非 JSON，关键词提取降级为使用原始问题（需换模型或改提取方式）
+- [x] ~~`glm-4-flash` 的 `with_structured_output` 返回长文本而非 JSON~~ — 已用 `KeywordExtractor` 替换，改为 prompt + regex 解析
 - [ ] Neo4j 向量索引 API `db.index.vector.queryNodes` 已被标记 deprecated，需迁移到 `db.index.vector.search`
 - [ ] 系统代理会导致 Embedding API（DashScope）和 LLM 关键词提取失败，需在文档中说明或代码中处理 `NO_PROXY`
-- [ ] `Neo4jGraphRetriever` 中 `get_graph_data_for_visualization` 和 `_build_graph_data` 逻辑高度重复，可合并
+- [x] ~~`Neo4jGraphRetriever` 中 `get_graph_data_for_visualization` 和 `_build_graph_data` 逻辑高度重复~~ — 已在 `GraphVisualizationService` 中合并
 - [ ] `quality_monitor.py` 中的 `main()` 函数里直接读取环境变量，未通过 settings 获取

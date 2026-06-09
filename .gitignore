@@ -38,3 +38,7 @@ graphrag_checkpoints.db
 quality_metrics_export.json
  
 requirements/
+
+mastery.*
+CLAUDE.md
+TODO.md

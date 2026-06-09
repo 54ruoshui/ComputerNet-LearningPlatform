@@ -20,86 +20,81 @@ from neo4j import GraphDatabase
 
 from src.exceptions import ConnectionError_, LLMError
 from src.langchain_config import LangGraphRAGConfig
-from src.langchain_retriever import Neo4jGraphRetriever
 from src.logging_config import session_id_var
+from src.embedding_manager import EmbeddingManager
+from src.keyword_extractor import KeywordExtractor
+from src.services.entity_retriever import EntityRetriever
+from src.services.graph_stats_service import GraphStatsService
+from src.services.graph_visualization_service import GraphVisualizationService
 
 logger = structlog.get_logger(__name__)
 
-# ==================== 模块级检索器引用 ====================
-_retriever: Neo4jGraphRetriever | None = None
 
+# ==================== 工具工厂（闭包绑定 retriever） ====================
 
-# ==================== Tool 定义 ====================
+def make_tools(entity_retriever: EntityRetriever, stats_service: GraphStatsService) -> list:
+    """创建绑定到指定服务的工具实例列表"""
 
-@tool
-def knowledge_search(query: str) -> str:
-    """搜索知识图谱，获取与网络知识相关的实体、关系、问答上下文以及可视化数据。
-    当用户询问计算机网络的概念、协议、设备或各层知识时，应优先使用此工具。
-    返回结果包含文本上下文和可视化图数据。
+    @tool
+    def knowledge_search(query: str) -> str:
+        """搜索知识图谱，获取与网络知识相关的实体、关系、问答上下文以及可视化数据。
+        当用户询问计算机网络的概念、协议、设备或各层知识时，应优先使用此工具。
+        返回结果包含文本上下文和可视化图数据。
 
-    Args:
-        query: 搜索问题或关键词，如"TCP三次握手"、"CSMA/CD工作原理"
-    """
-    if _retriever is None:
-        return "知识图谱检索器未初始化。"
-    try:
-        result = _retriever.search_with_graph(query)
-        return json.dumps(result, ensure_ascii=False)
-    except Exception as e:
-        logger.error("knowledge_search 工具调用失败", error=str(e))
-        return f"知识图谱检索失败: {e}"
+        Args:
+            query: 搜索问题或关键词，如"TCP三次握手"、"CSMA/CD工作原理"
+        """
+        try:
+            result = entity_retriever.search_with_graph(query)
+            return json.dumps(result, ensure_ascii=False)
+        except Exception as e:
+            logger.error("knowledge_search 工具调用失败", error=str(e))
+            return f"知识图谱检索失败: {e}"
 
+    @tool
+    def graph_statistics() -> str:
+        """获取知识图谱的统计信息，包括实体总数、关系总数、各类型数量、各层实体数等。
+        当用户询问知识图谱的规模、覆盖范围或数据组成时使用此工具。"""
+        try:
+            stats = stats_service.get_stats()
+            return json.dumps(stats, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error("graph_statistics 工具调用失败", error=str(e))
+            return json.dumps({"error": str(e)})
 
-@tool
-def graph_statistics() -> str:
-    """获取知识图谱的统计信息，包括实体总数、关系总数、各类型数量、各层实体数等。
-    当用户询问知识图谱的规模、覆盖范围或数据组成时使用此工具。"""
-    if _retriever is None:
-        return json.dumps({"error": "检索器未初始化"})
-    try:
-        stats = _retriever.get_graph_stats()
-        return json.dumps(stats, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.error("graph_statistics 工具调用失败", error=str(e))
-        return json.dumps({"error": str(e)})
+    @tool
+    def node_search(query: str, limit: int = 10) -> str:
+        """在知识图谱中按关键词搜索节点，返回匹配的节点名称、类型和描述。
+        用于查找特定实体或精确了解某个概念的基本信息。
 
+        Args:
+            query: 搜索关键词
+            limit: 返回结果数量上限，默认10
+        """
+        try:
+            nodes = entity_retriever.keyword_search(query, limit=limit)
+            return json.dumps(nodes, ensure_ascii=False)
+        except Exception as e:
+            logger.error("node_search 工具调用失败", error=str(e))
+            return json.dumps([])
 
-@tool
-def node_search(query: str, limit: int = 10) -> str:
-    """在知识图谱中按关键词搜索节点，返回匹配的节点名称、类型和描述。
-    用于查找特定实体或精确了解某个概念的基本信息。
+    @tool
+    def node_neighbors(node_name: str, depth: int = 2) -> str:
+        """获取知识图谱中某个节点的邻居节点，探索实体间的连接关系。
+        用于深入了解某个实体周围的相关概念和关联。
 
-    Args:
-        query: 搜索关键词
-        limit: 返回结果数量上限，默认10
-    """
-    if _retriever is None:
-        return json.dumps([])
-    try:
-        nodes = _retriever.keyword_search(query, limit=limit)
-        return json.dumps(nodes, ensure_ascii=False)
-    except Exception as e:
-        logger.error("node_search 工具调用失败", error=str(e))
-        return json.dumps([])
+        Args:
+            node_name: 节点名称（需精确匹配，如"TCP"、"以太网"）
+            depth: 探索深度，1=直接邻居，2=两跳邻居。默认2
+        """
+        try:
+            neighbors = entity_retriever.get_neighbors(node_name, depth=depth)
+            return json.dumps(neighbors, ensure_ascii=False)
+        except Exception as e:
+            logger.error("node_neighbors 工具调用失败", node=node_name, error=str(e))
+            return json.dumps([])
 
-
-@tool
-def node_neighbors(node_name: str, depth: int = 2) -> str:
-    """获取知识图谱中某个节点的邻居节点，探索实体间的连接关系。
-    用于深入了解某个实体周围的相关概念和关联。
-
-    Args:
-        node_name: 节点名称（需精确匹配，如"TCP"、"以太网"）
-        depth: 探索深度，1=直接邻居，2=两跳邻居。默认2
-    """
-    if _retriever is None:
-        return json.dumps([])
-    try:
-        neighbors = _retriever.get_neighbors(node_name, depth=depth)
-        return json.dumps(neighbors, ensure_ascii=False)
-    except Exception as e:
-        logger.error("node_neighbors 工具调用失败", node=node_name, error=str(e))
-        return json.dumps([])
+    return [knowledge_search, graph_statistics, node_search, node_neighbors]
 
 
 # ==================== Agent 类 ====================
@@ -127,7 +122,7 @@ class GraphRAGAgent:
         try:
             self.llm = ChatOpenAI(
                 base_url=self.config.zhipu_base_url,
-                api_key=self.config.zhipu_api_key,
+                api_key=self.config.zhipuai_api_key,
                 model=self.config.zhipu_model,
                 temperature=self.config.temperature,
                 max_tokens=self.config.max_tokens,
@@ -139,32 +134,27 @@ class GraphRAGAgent:
                 cause=e,
             ) from e
 
-        # Graph retriever (共享 driver)
-        self.retriever = Neo4jGraphRetriever(
-            neo4j_uri=self.config.neo4j_uri,
-            neo4j_user=self.config.neo4j_user,
-            neo4j_password=self.config.neo4j_password,
+        # 服务层（直接创建，共享 driver）
+        embedding_mgr = EmbeddingManager()
+        keyword_extractor = KeywordExtractor()
+        self._entity_retriever = EntityRetriever(
+            driver=self.driver,
+            embedding_mgr=embedding_mgr,
+            keyword_extractor=keyword_extractor,
             max_entities=self.config.max_entities,
-            max_context_tokens=self.config.max_context_tokens,
         )
-        self.retriever._driver = self.driver
-        self.retriever._self_created_driver = False
-
-        # 设置模块级检索器引用（供 tools 访问）
-        global _retriever
-        _retriever = self.retriever
+        self._stats_service = GraphStatsService(driver=self.driver)
+        self._viz_service = GraphVisualizationService(
+            driver=self.driver,
+            entity_retriever_fn=self._entity_retriever.retrieve_entities,
+        )
 
         # 会话记忆
         self.checkpointer = MemorySaver()
         self._sessions: set = set()
 
-        # 构建工具列表
-        self.tools = [
-            knowledge_search,
-            graph_statistics,
-            node_search,
-            node_neighbors,
-        ]
+        # 构建工具（闭包绑定服务）
+        self.tools = make_tools(self._entity_retriever, self._stats_service)
 
         # 构建 ReAct Agent
         self.agent = create_react_agent(
@@ -313,7 +303,15 @@ class GraphRAGAgent:
     # -------------------- 其他接口 --------------------
 
     def get_stats(self) -> dict:
-        return self.retriever.get_graph_stats()
+        return self._stats_service.get_stats()
+
+    @property
+    def entity_retriever(self) -> EntityRetriever:
+        return self._entity_retriever
+
+    @property
+    def stats_service(self) -> GraphStatsService:
+        return self._stats_service
 
     def close(self):
         if self.driver:
