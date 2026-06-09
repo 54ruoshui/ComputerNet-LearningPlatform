@@ -10,6 +10,7 @@
 - **智能问答**：LangGraph ReAct Agent 自主选择工具（知识搜索、图可视化、统计、节点搜索、邻居探索）完成问答
 - **混合检索**：结合 Qwen 语义向量检索与关键词检索，提供精准的知识召回
 - **会话记忆**：基于 LangGraph MemorySaver 实现多轮对话上下文记忆
+- **工程化特性**：统一配置校验（pydantic-settings）、API Key 认证、结构化日志（structlog）、自定义异常体系、自动重试（tenacity）
 - **质量监控**：实时监控和评估知识质量，支持告警和趋势分析
 - **Web 界面**：交互式可视化界面，支持 D3.js 图可视化、语音输入和会话管理
 
@@ -23,10 +24,10 @@
 | 混合检索 | Qwen 语义向量检索 + 关键词检索，合并排序返回 |
 | 会话记忆 | 多轮对话上下文保持，支持会话创建、切换和删除 |
 | 质量监控 | 实时监控提取准确率、验证通过率等指标，支持告警和趋势 |
-| 图可视化 | D3.js 交互式图可视化，支持节点搜索和邻居探索 |
-| 图谱导出 | Graphviz 生成知识图谱可视化图片（PNG/PDF） |
-| 语音输入 | 支持语音输入问题 |
-| 历史记录 | 保存查询历史，支持导出 |
+| 图可视化 | D3.js 交互式图可视化 + Graphviz PNG 图片生成 |
+| API 认证 | 可选 X-API-Key 认证，未配置时开发模式跳过 |
+| 结构化日志 | 每条日志自动注入 request_id / session_id，支持 JSON 格式 |
+| 错误重试 | Neo4j / LLM / Embedding API 调用自动重试（指数退避） |
 
 ## 技术栈
 
@@ -35,8 +36,10 @@
 - **图数据库**: Neo4j
 - **LLM**: 智谱AI GLM-4-Flash（通过 ZhipuAI API）
 - **Embeddings**: Qwen text-embedding-v3（通过 DashScope API，1024 维）
+- **配置管理**: pydantic-settings
+- **日志**: structlog
+- **重试**: tenacity
 - **数据验证**: Pydantic
-- **模板引擎**: Jinja2
 - **前端**: HTML5, CSS3, JavaScript, D3.js
 
 ## 快速开始
@@ -70,23 +73,33 @@
 
    创建 `.env` 文件并配置以下内容：
    ```bash
-   # Neo4j 配置
+   # Neo4j（必填）
    NEO4J_URI=bolt://localhost:7687
    NEO4J_USER=neo4j
    NEO4J_PASSWORD=your-password
 
-   # 智谱AI LLM 配置
+   # 智谱AI LLM（必填）
    ZHIPUAI_API_KEY=sk-your-api-key
    ZHIPUAI_MODEL=glm-4-flash
 
-   # Qwen Embeddings 配置（语义检索必需）
+   # Qwen Embeddings（语义检索必需）
    QWEN_API_KEY=sk-your-api-key
    QWEN_EMBEDDING_MODEL=text-embedding-v3
 
-   # Web 配置
+   # Web 配置（可选）
    WEB_HOST=0.0.0.0
-   WEB_PORT=5000
+   WEB_PORT=5001
    DEBUG=false
+
+   # API 认证（可选，不设则跳过认证）
+   API_KEY=your-secret-key
+
+   # 日志格式（可选，console 或 json）
+   LOG_LEVEL=INFO
+   LOG_FORMAT=console
+
+   # 快速启动（可选，跳过初始化延迟到首次查询）
+   FAST_START=false
    ```
 
 5. **启动 Neo4j 数据库**
@@ -110,12 +123,12 @@
    ```bash
    python run.py --mode web
    # 或指定 host/port
-   python run.py --mode web --host 0.0.0.0 --port 5000 --debug
+   python run.py --mode web --host 0.0.0.0 --port 5001 --debug
    ```
 
 8. **访问应用**
 
-   打开浏览器访问 http://localhost:5000
+   打开浏览器访问 http://localhost:5001
 
 ## 使用说明
 
@@ -123,8 +136,7 @@
 
 1. **智能问答**
    - 在输入框中输入关于计算机网络的问题
-   - 系统会检索相关知识并生成答案
-   - 可查看相关的图结构可视化
+   - 系统会检索知识图谱并生成答案，同时展示相关知识图谱可视化
 
 2. **图探索**
    - 使用搜索功能查找特定节点
@@ -141,26 +153,39 @@ python run.py --mode cli
 python run.py --mode test
 ```
 
+### API 认证
+
+如果在 `.env` 中设置了 `API_KEY`，所有 API 请求需要在请求头中携带：
+
+```
+X-API-Key: your-secret-key
+```
+
+白名单路径（无需认证）：`/`、`/docs`、`/api/health`、`/static/*`
+
 ## 项目结构
 
 ```
 aigc/
-├── config/                 # 配置模块
-│   └── config.py           # 系统配置
 ├── scripts/                # 数据导入脚本
 │   ├── build_from_json.py              # 从 JSON 导入分层知识图谱
 │   ├── build_index_from_docs.py        # 从 PDF 构建（GraphRAG 流水线）
 │   └── generate_embeddings.py          # 生成 Qwen 向量嵌入
 ├── src/                    # 核心源代码
+│   ├── settings.py                     # 统一配置中心（pydantic-settings）
+│   ├── exceptions.py                   # 自定义异常体系
+│   ├── logging_config.py               # 结构化日志（structlog）
+│   ├── retry.py                        # 重试策略（tenacity）
 │   ├── graphrag_agent.py               # LangGraph ReAct Agent + 工具 + 会话记忆
 │   ├── langchain_retriever.py          # Neo4j 混合检索器（语义 + 关键词）
-│   ├── langchain_config.py             # LangChain/LangGraph 配置
+│   ├── langchain_config.py             # 配置兼容层
 │   ├── embedding_manager.py            # Qwen Embedding 管理（DashScope API）
-│   ├── enhanced_prompt_engineering.py  # 增强提示词工程
 │   ├── quality_monitor.py              # 质量监控与告警
+│   ├── mastery_tracker.py              # 学生知识掌握追踪（SQLite）
 │   └── image_generator.py              # Graphviz 图谱图片生成
 ├── web/
-│   └── graph_rag_web.py                # FastAPI Web 应用
+│   ├── graph_rag_web.py                # FastAPI Web 应用
+│   └── middleware.py                    # API Key 认证中间件
 ├── templates/
 │   └── integrated_index.html           # 主页模板
 ├── static/js/
@@ -176,6 +201,8 @@ aigc/
 │   │   └── cross_layer.json
 │   └── generated_images/   # Graphviz 生成的图片
 ├── run.py                  # 主启动脚本
+├── TODO.md                 # 工程化待办清单
+├── CLAUDE.md               # Claude Code 项目指引
 └── requirements.txt        # Python 依赖
 ```
 
@@ -190,6 +217,15 @@ aigc/
 | `/api/sessions/new` | POST | 创建新会话 |
 | `/api/sessions/{id}/history` | GET | 获取会话聊天历史 |
 | `/api/sessions/{id}` | DELETE | 删除会话 |
+
+### 知识掌握
+
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/api/entities` | GET | 获取所有实体（按层分组） |
+| `/api/mastery/{session_id}` | GET | 获取掌握状态 |
+| `/api/mastery` | POST | 设置掌握状态 |
+| `/api/mastery/batch` | POST | 批量设置掌握状态 |
 
 ### 图谱操作
 
@@ -221,18 +257,23 @@ aigc/
 
 ### 环境变量
 
-| 变量名 | 说明 | 默认值 |
-|--------|------|--------|
-| `NEO4J_URI` | Neo4j 连接地址 | bolt://localhost:7687 |
-| `NEO4J_USER` | Neo4j 用户名 | neo4j |
-| `NEO4J_PASSWORD` | Neo4j 密码 | - |
-| `ZHIPUAI_API_KEY` | 智谱AI API Key（LLM） | - |
-| `ZHIPUAI_MODEL` | 智谱AI 模型 | glm-4-flash |
-| `QWEN_API_KEY` | 通义千问 API Key（Embeddings） | - |
-| `QWEN_EMBEDDING_MODEL` | Qwen Embedding 模型 | text-embedding-v3 |
-| `WEB_HOST` | Web 服务器地址 | 0.0.0.0 |
-| `WEB_PORT` | Web 服务器端口 | 5000 |
-| `DEBUG` | 调试模式 | false |
+| 变量名 | 说明 | 必填 | 默认值 |
+|--------|------|------|--------|
+| `NEO4J_URI` | Neo4j 连接地址 | 否 | bolt://localhost:7687 |
+| `NEO4J_USER` | Neo4j 用户名 | 否 | neo4j |
+| `NEO4J_PASSWORD` | Neo4j 密码 | **是** | - |
+| `ZHIPUAI_API_KEY` | 智谱AI API Key（LLM） | **是** | - |
+| `ZHIPUAI_MODEL` | 智谱AI 模型 | 否 | glm-4-flash |
+| `QWEN_API_KEY` | 通义千问 API Key（Embeddings） | 否 | - |
+| `QWEN_EMBEDDING_MODEL` | Qwen Embedding 模型 | 否 | text-embedding-v3 |
+| `DASHSCOPE_API_KEY` | DashScope API Key（Qwen 备选） | 否 | - |
+| `API_KEY` | API 认证密钥（不设则跳过认证） | 否 | - |
+| `WEB_HOST` | Web 服务器地址 | 否 | 0.0.0.0 |
+| `WEB_PORT` | Web 服务器端口 | 否 | 5001 |
+| `DEBUG` | 调试模式 | 否 | false |
+| `LOG_LEVEL` | 日志级别 | 否 | INFO |
+| `LOG_FORMAT` | 日志格式（console / json） | 否 | console |
+| `FAST_START` | 快速启动模式 | 否 | false |
 
 ## 系统架构
 
@@ -241,13 +282,15 @@ aigc/
     │
     ▼
 FastAPI (/api/query)  ←──  web/graph_rag_web.py
+  ├── API Key 认证 (middleware.py)
+  ├── request_id 注入 (structlog)
+  └── 全局异常处理 (exceptions.py)
     │
     ▼
 GraphRAGAgent  ←──  src/graphrag_agent.py
   LangGraph ReAct Agent + MemorySaver 会话记忆
   LLM (ZhipuAI) 自主选择工具:
-    ├── knowledge_search   → 混合语义+关键词检索
-    ├── graph_visualize    → 图可视化数据
+    ├── knowledge_search   → 检索 + 可视化数据
     ├── graph_statistics   → 图统计信息
     ├── node_search        → 关键词节点搜索
     └── node_neighbors     → 节点邻居探索
@@ -265,7 +308,32 @@ Neo4j 图数据库
   向量索引: entity_embedding_index (cosine, 1024-dim)
 ```
 
+## 工程化特性
+
+### 配置管理
+
+使用 `pydantic-settings` 统一管理所有配置。必填字段（`NEO4J_PASSWORD`、`ZHIPUAI_API_KEY`）缺失时启动即报错，不再静默降级。所有模块通过 `get_settings()` 获取配置单例。
+
+### 异常处理
+
+自定义异常体系（`src/exceptions.py`）：`ConfigError`、`ConnectionError_`、`LLMError`、`EmbeddingError`、`RetrievalError`。FastAPI 全局 exception handler 统一返回 JSON 错误响应。
+
+### 结构化日志
+
+基于 `structlog`，每条日志自动注入 `request_id` 和 `session_id`。支持 `console`（开发可读）和 `json`（生产可解析）两种格式。
+
+### 重试机制
+
+外部服务调用自动重试（`src/retry.py`）：
+- Neo4j：3 次，指数退避 1-10s
+- LLM：2 次，指数退避 2-30s
+- Embedding API：3 次，指数退避 1-10s
+
 ## 常见问题
+
+### 启动报配置校验错误
+
+确认 `.env` 中已设置 `NEO4J_PASSWORD` 和 `ZHIPUAI_API_KEY`（无默认值的必填字段）。
 
 ### Neo4j 连接失败
 
@@ -282,8 +350,22 @@ Neo4j 图数据库
 ### 语义搜索无结果
 
 1. 确认已运行 `python scripts/generate_embeddings.py` 生成向量嵌入
-2. 检查 QWEN_API_KEY 是否正确配置
+2. 检查 `QWEN_API_KEY` 或 `DASHSCOPE_API_KEY` 是否正确配置
 3. 确认 Neo4j 中 `entity_embedding_index` 向量索引已创建
+
+### 系统代理导致 API 调用失败
+
+如果开启了系统代理（如 Clash），Embedding API 可能无法连接。在 `.env` 中添加：
+
+```bash
+NO_PROXY=dashscope.aliyuncs.com,open.bigmodel.cn
+```
+
+或临时关闭系统代理后启动服务。
+
+### 回答没有知识图谱
+
+ReAct Agent 必须先调用 `knowledge_search` 工具才能返回图谱数据。如果 Agent 直接回答文字而跳过工具调用，通常是 LLM 模型行为问题。
 
 ## 许可证
 

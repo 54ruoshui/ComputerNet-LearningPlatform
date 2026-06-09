@@ -3,36 +3,43 @@
 GraphRAG系统启动脚本
 """
 
-import os
 import sys
 import argparse
-from dotenv import load_dotenv
 
-# 加载环境变量
-load_dotenv()
+from src.settings import get_settings
+from src.logging_config import setup_logging
 
 
 def main():
     parser = argparse.ArgumentParser(description='计算机网络知识图谱GraphRAG系统')
     parser.add_argument('--mode', choices=['web', 'cli', 'test'], default='web',
-                      help='运行模式: web(网页界面), cli(命令行), test(测试)')
-    parser.add_argument('--host', default='0.0.0.0', help='Web服务器主机地址')
-    parser.add_argument('--port', type=int, default=5001, help='Web服务器端口')
+                        help='运行模式: web(网页界面), cli(命令行), test(测试)')
+    parser.add_argument('--host', default=None, help='Web服务器主机地址')
+    parser.add_argument('--port', type=int, default=None, help='Web服务器端口')
     parser.add_argument('--debug', action='store_true', help='启用调试模式')
 
     args = parser.parse_args()
+
+    # 加载配置并初始化日志
+    settings = get_settings()
+    setup_logging(log_level=settings.log_level, log_format=settings.log_format)
+
+    host = args.host or settings.web_host
+    port = args.port or settings.web_port
+    debug = args.debug or settings.debug
 
     if args.mode == 'web':
         print("启动GraphRAG Web界面 (FastAPI + LangGraph + 记忆)...")
         from web.graph_rag_web import main
 
-        print(f"访问地址: http://localhost:{args.port}")
-        print(f"API 文档: http://localhost:{args.port}/docs")
+        print(f"访问地址: http://localhost:{port}")
+        print(f"API 文档: http://localhost:{port}/docs")
         print("按 Ctrl+C 停止服务器")
 
-        os.environ['WEB_HOST'] = args.host
-        os.environ['WEB_PORT'] = str(args.port)
-        os.environ['DEBUG'] = str(args.debug).lower()
+        import os
+        os.environ['WEB_HOST'] = host
+        os.environ['WEB_PORT'] = str(port)
+        os.environ['DEBUG'] = str(debug).lower()
 
         try:
             main()
@@ -101,7 +108,6 @@ def main():
                 print(f"答案: {result['answer']}")
                 print(f"耗时: {result['processing_time']:.2f}s")
 
-            # 测试记忆：追问
             print(f"\n{'='*60}")
             follow_up = "能详细解释一下吗？"
             print(f"追问: {follow_up}")

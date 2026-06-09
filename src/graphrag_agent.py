@@ -3,17 +3,13 @@ GraphRAG ReAct Agent（基于 LangGraph create_react_agent）
 
 将知识图谱检索、可视化、统计等功能封装为 LangChain Tool，
 由 LLM 自主决策调用哪些工具来回答用户问题。
-
-替代原来的手动 StateGraph（retrieve→generate）管道，
-实现更灵活的多工具协同调用。
 """
 
 import json
 import uuid
-import logging
 import time
-from typing import List, Dict, Any, Optional
 
+import structlog
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
 from langchain_core.tools import tool
@@ -22,13 +18,15 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from neo4j import GraphDatabase
 
+from src.exceptions import ConnectionError_, LLMError
 from src.langchain_config import LangGraphRAGConfig
 from src.langchain_retriever import Neo4jGraphRetriever
+from src.logging_config import session_id_var
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # ==================== 模块级检索器引用 ====================
-_retriever: Optional[Neo4jGraphRetriever] = None
+_retriever: Neo4jGraphRetriever | None = None
 
 
 # ==================== Tool 定义 ====================
@@ -48,6 +46,7 @@ def knowledge_search(query: str) -> str:
         result = _retriever.search_with_graph(query)
         return json.dumps(result, ensure_ascii=False)
     except Exception as e:
+        logger.error("knowledge_search 工具调用失败", error=str(e))
         return f"知识图谱检索失败: {e}"
 
 
@@ -61,6 +60,7 @@ def graph_statistics() -> str:
         stats = _retriever.get_graph_stats()
         return json.dumps(stats, ensure_ascii=False, indent=2)
     except Exception as e:
+        logger.error("graph_statistics 工具调用失败", error=str(e))
         return json.dumps({"error": str(e)})
 
 
@@ -79,6 +79,7 @@ def node_search(query: str, limit: int = 10) -> str:
         nodes = _retriever.keyword_search(query, limit=limit)
         return json.dumps(nodes, ensure_ascii=False)
     except Exception as e:
+        logger.error("node_search 工具调用失败", error=str(e))
         return json.dumps([])
 
 
@@ -97,6 +98,7 @@ def node_neighbors(node_name: str, depth: int = 2) -> str:
         neighbors = _retriever.get_neighbors(node_name, depth=depth)
         return json.dumps(neighbors, ensure_ascii=False)
     except Exception as e:
+        logger.error("node_neighbors 工具调用失败", node=node_name, error=str(e))
         return json.dumps([])
 
 
@@ -105,23 +107,37 @@ def node_neighbors(node_name: str, depth: int = 2) -> str:
 class GraphRAGAgent:
     """基于 LangGraph ReAct Agent 的 GraphRAG 查询引擎，支持多工具调用和会话记忆"""
 
-    def __init__(self, config: Optional[LangGraphRAGConfig] = None):
+    def __init__(self, config: LangGraphRAGConfig | None = None):
         self.config = config or LangGraphRAGConfig()
 
         # Neo4j driver
-        self.driver = GraphDatabase.driver(
-            self.config.neo4j_uri,
-            auth=(self.config.neo4j_user, self.config.neo4j_password)
-        )
+        try:
+            self.driver = GraphDatabase.driver(
+                self.config.neo4j_uri,
+                auth=(self.config.neo4j_user, self.config.neo4j_password)
+            )
+        except Exception as e:
+            raise ConnectionError_(
+                "Neo4j 连接失败",
+                detail=f"uri={self.config.neo4j_uri}",
+                cause=e,
+            ) from e
 
         # LLM — ZhipuAI via OpenAI-compatible endpoint
-        self.llm = ChatOpenAI(
-            base_url=self.config.zhipu_base_url,
-            api_key=self.config.zhipu_api_key,
-            model=self.config.zhipu_model,
-            temperature=self.config.temperature,
-            max_tokens=self.config.max_tokens,
-        )
+        try:
+            self.llm = ChatOpenAI(
+                base_url=self.config.zhipu_base_url,
+                api_key=self.config.zhipu_api_key,
+                model=self.config.zhipu_model,
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens,
+            )
+        except Exception as e:
+            raise LLMError(
+                "LLM 初始化失败",
+                detail=f"model={self.config.zhipu_model}",
+                cause=e,
+            ) from e
 
         # Graph retriever (共享 driver)
         self.retriever = Neo4jGraphRetriever(
@@ -164,20 +180,13 @@ class GraphRAGAgent:
 
     @staticmethod
     def _build_system_prompt() -> str:
-        return """你是一个计算机网络领域的资深专家和优秀教师。你可以使用一组知识图谱工具来回答用户关于计算机网络的问题。
+        return """你是一个计算机网络领域的资深专家和优秀教师。
 
-# 可用工具
-- **knowledge_search**: 搜索知识图谱，同时获取实体/关系/问答上下文和可视化图数据。
-- **graph_statistics**: 获取知识图谱统计信息（实体数、关系数、各层数据）。
-- **node_search**: 按关键词搜索特定节点，查看节点基本信息。
-- **node_neighbors**: 获取某个节点的邻居，探索关联实体。
+# 重要：必须调用工具
+对于用户的每一个问题，你**必须首先调用 knowledge_search 工具**进行检索，然后根据工具返回的结果来回答。
+绝对不要跳过工具调用直接回答问题。即使你认为你知道答案，也必须先调用 knowledge_search。
 
-# 工具使用策略
-1. 用户问事实性问题时，**必须调用 knowledge_search** 获取知识图谱上下文和可视化数据。
-2. 如果 knowledge_search 返回信息不足，可以用 node_search + node_neighbors 深入探索。
-3. 用户问图谱本身的规模和内容时，使用 graph_statistics。
-
-# 回答要求（非常重要）
+# 回答要求
 1. **详细充分**：回答应当详尽充实，每个知识点充分展开解释，不少于500字
 2. **结构清晰**：使用多级标题、编号列表、对比表格组织内容
 3. **解释原理**：不仅给出"是什么"，还要解释"为什么"和"怎么工作的"
@@ -196,14 +205,15 @@ class GraphRAGAgent:
     def query(
         self,
         question: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         mastery_context: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict:
         start_time = time.time()
 
         if not session_id:
             session_id = str(uuid.uuid4())
 
+        session_id_var.set(session_id)
         self._sessions.add(session_id)
         config = {"configurable": {"thread_id": session_id}}
 
@@ -232,7 +242,6 @@ class GraphRAGAgent:
                     if msg.name == "knowledge_search":
                         try:
                             parsed = json.loads(msg.content)
-                            # 合并工具返回 {"context": ..., "graph_data": ...}
                             if isinstance(parsed, dict) and "graph_data" in parsed:
                                 gd = parsed["graph_data"]
                                 if gd.get("nodes"):
@@ -255,13 +264,11 @@ class GraphRAGAgent:
             if context_length > 0:
                 response["context_length"] = context_length
 
-            logger.info(f"ReAct Agent 查询完成，耗时: {elapsed:.2f}秒")
+            logger.info("ReAct Agent 查询完成", elapsed=f"{elapsed:.2f}s", session_id=session_id)
             return response
 
         except Exception as e:
-            logger.error(f"ReAct Agent 查询失败: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error("ReAct Agent 查询失败", error=str(e), session_id=session_id)
             return {
                 "question": question,
                 "answer": f"查询处理失败: {str(e)}",
@@ -272,7 +279,7 @@ class GraphRAGAgent:
 
     # -------------------- 会话管理 --------------------
 
-    def get_session_history(self, session_id: str) -> List[Dict[str, str]]:
+    def get_session_history(self, session_id: str) -> list[dict]:
         config = {"configurable": {"thread_id": session_id}}
         try:
             state = self.agent.get_state(config)
@@ -286,10 +293,10 @@ class GraphRAGAgent:
                         history.append({"role": "assistant", "content": msg.content})
                 return history
         except Exception as e:
-            logger.warning(f"获取会话历史失败: {e}")
+            logger.warning("获取会话历史失败", error=str(e), session_id=session_id)
         return []
 
-    def list_sessions(self) -> List[str]:
+    def list_sessions(self) -> list[str]:
         return list(self._sessions)
 
     def new_session(self) -> str:
@@ -305,7 +312,7 @@ class GraphRAGAgent:
 
     # -------------------- 其他接口 --------------------
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict:
         return self.retriever.get_graph_stats()
 
     def close(self):

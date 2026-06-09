@@ -1,40 +1,26 @@
 """
 LangGraph RAG 配置模块
-管理 LangChain/LangGraph 和 Neo4j 的连接配置
+保留 LangGraphRAGConfig 类名向后兼容，内部委托给 Settings。
 """
 
-import os
-from dataclasses import dataclass, field
-from typing import Optional
-
-from dotenv import load_dotenv
-
-load_dotenv()
+from src.settings import get_settings
 
 
-@dataclass
 class LangGraphRAGConfig:
-    """LangGraph RAG 系统配置"""
+    """LangGraph RAG 系统配置（向后兼容包装）"""
 
-    # Neo4j
-    neo4j_uri: str = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-    neo4j_user: str = os.getenv("NEO4J_USER", "neo4j")
-    neo4j_password: str = os.getenv("NEO4J_PASSWORD", "")
-
-    # ZhipuAI (OpenAI-compatible)
-    zhipu_api_key: str = os.getenv("ZHIPUAI_API_KEY", "")
-    zhipu_model: str = os.getenv("ZHIPUAI_MODEL", "glm-4-flash")
-    zhipu_base_url: str = os.getenv("ZHIPUAI_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")  # 不要再加 /v4，ChatOpenAI 会自动拼接
-
-    # Retrieval
-    max_entities: int = 20
-    max_context_tokens: int = 8000
-
-    # Memory / conversation
-    max_messages_before_summary: int = 20
-    memory_backend: str = os.getenv("MEMORY_BACKEND", "memory")  # "memory" | "sqlite"
-    sqlite_db_path: str = os.getenv("SQLITE_DB_PATH", "graphrag_checkpoints.db")
-
-    # LLM generation
-    temperature: float = 0.3
-    max_tokens: int = 4096
+    def __init__(self):
+        s = get_settings()
+        self.neo4j_uri = s.neo4j_uri
+        self.neo4j_user = s.neo4j_user
+        self.neo4j_password = s.neo4j_password
+        self.zhipu_api_key = s.zhipuai_api_key
+        self.zhipu_model = s.zhipuai_model
+        self.zhipu_base_url = s.zhipuai_base_url
+        self.max_entities = s.max_entities
+        self.max_context_tokens = s.max_context_tokens
+        self.max_messages_before_summary = s.max_messages_before_summary
+        self.memory_backend = s.memory_backend
+        self.sqlite_db_path = s.sqlite_db_path
+        self.temperature = s.temperature
+        self.max_tokens = s.max_tokens

@@ -1,19 +1,17 @@
 """
 Embedding 管理器
-
 使用 Qwen (DashScope) text-embedding-v3 生成文本向量嵌入。
 """
 
-import os
-import time
 import logging
-from typing import List, Optional
 
-from dotenv import load_dotenv
+import structlog
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
 
-load_dotenv()
+from src.exceptions import EmbeddingError
+from src.settings import get_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 DIMENSION = 1024
 
@@ -22,60 +20,76 @@ class EmbeddingManager:
     """DashScope text-embedding-v3 向量嵌入管理器"""
 
     def __init__(self):
-        self.model_name = os.getenv("QWEN_EMBEDDING_MODEL", "text-embedding-v3")
+        settings = get_settings()
+        self.model_name = settings.qwen_embedding_model
         self.dimension = DIMENSION
-        self.retry_times = 3
-        self.retry_delay = 1.0
 
         try:
             import dashscope
             from dashscope import TextEmbedding
 
-            api_key = os.getenv("QWEN_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
+            api_key = settings.qwen_api_key or settings.dashscope_api_key
             if not api_key:
-                raise ValueError("QWEN_API_KEY 或 DASHSCOPE_API_KEY 未配置")
+                raise EmbeddingError(
+                    "QWEN_API_KEY 或 DASHSCOPE_API_KEY 未配置",
+                    detail="请在 .env 中设置至少一个 embedding API key",
+                )
 
             dashscope.api_key = api_key
             self._text_embedding = TextEmbedding
             self._ready = True
-            logger.info(f"EmbeddingManager 初始化完成，模型: {self.model_name}")
+            logger.info("EmbeddingManager 初始化完成", model=self.model_name)
         except ImportError:
             self._ready = False
             logger.warning("dashscope 未安装，语义检索不可用")
+        except EmbeddingError:
+            raise
         except Exception as e:
             self._ready = False
-            logger.warning(f"EmbeddingManager 初始化失败: {e}")
+            raise EmbeddingError(
+                "EmbeddingManager 初始化失败",
+                detail=str(e),
+                cause=e,
+            ) from e
 
     @property
     def ready(self) -> bool:
         return self._ready
 
-    def embed_query(self, text: str) -> Optional[List[float]]:
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(EmbeddingError),
+        before_sleep=before_sleep_log(logging.getLogger(__name__), logging.WARNING),
+        reraise=True,
+    )
+    def _call_embedding_api(self, text: str):
+        """调用 Embedding API（带重试）"""
+        response = self._text_embedding.call(
+            model=self.model_name,
+            input=text,
+        )
+        if response.status_code == 200:
+            return response.output["embeddings"][0]["embedding"]
+        raise EmbeddingError(
+            f"Embedding API 返回 {response.status_code}",
+            detail=f"model={self.model_name}, status={response.status_code}",
+        )
+
+    def embed_query(self, text: str) -> list[float] | None:
         """将用户问题转为向量"""
         if not self._ready or not text.strip():
             return None
 
-        for attempt in range(1, self.retry_times + 1):
-            try:
-                response = self._text_embedding.call(
-                    model=self.model_name,
-                    input=text.strip()
-                )
-                if response.status_code == 200:
-                    return response.output["embeddings"][0]["embedding"]
-                logger.warning(f"Embedding API 返回 {response.status_code}，尝试 {attempt}/{self.retry_times}")
-            except Exception as e:
-                logger.warning(f"Embedding 生成失败（尝试 {attempt}/{self.retry_times}）: {e}")
+        try:
+            return self._call_embedding_api(text.strip())
+        except EmbeddingError as e:
+            logger.warning("Embedding 生成失败", error=str(e))
+            return None
+        except Exception as e:
+            logger.warning("Embedding 生成异常", error=str(e))
+            return None
 
-            if attempt < self.retry_times:
-                time.sleep(self.retry_delay)
-
-        return None
-
-    def embed_texts(self, texts: List[str]) -> List[Optional[List[float]]]:
+    def embed_texts(self, texts: list[str]) -> list[list[float] | None]:
         """批量生成向量"""
-        results = []
-        for text in texts:
-            embedding = self.embed_query(text)
-            results.append(embedding)
-        return results
+        return [self.embed_query(text) for text in texts]

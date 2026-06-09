@@ -6,10 +6,10 @@ LangChain Neo4j 自定义检索器（层级知识图谱版本）
 """
 
 import json
-import os
 import logging
-from typing import List, Dict, Any, Optional
 
+import structlog
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
@@ -18,13 +18,28 @@ from neo4j import GraphDatabase
 from pydantic import BaseModel, Field
 
 from src.embedding_manager import EmbeddingManager
+from src.exceptions import ConnectionError_, RetrievalError
+from src.settings import get_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
+
+_log = logging.getLogger(__name__)
 
 
 class KeywordsOutput(BaseModel):
     """LLM 关键词提取的结构化输出"""
-    keywords: List[str] = Field(description="从问题中提取的3-5个计算机网络核心关键词")
+    keywords: list[str] = Field(description="从问题中提取的3-5个计算机网络核心关键词")
+
+
+def _neo4j_session_retry(func):
+    """装饰器：对 Neo4j session 操作添加重试"""
+    return retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(ConnectionError_),
+        before_sleep=before_sleep_log(_log, logging.WARNING),
+        reraise=True,
+    )(func)
 
 
 class Neo4jGraphRetriever(BaseRetriever):
@@ -36,26 +51,36 @@ class Neo4jGraphRetriever(BaseRetriever):
     max_entities: int = 20
     max_context_tokens: int = 8000
 
-    _driver: Any = None
+    _driver: object = None
 
     class Config:
         arbitrary_types_allowed = True
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        settings = get_settings()
+
         if self._driver is None:
-            self._driver = GraphDatabase.driver(
-                self.neo4j_uri,
-                auth=(self.neo4j_user, self.neo4j_password)
-            )
-            self._self_created_driver = True
+            try:
+                self._driver = GraphDatabase.driver(
+                    self.neo4j_uri,
+                    auth=(self.neo4j_user, self.neo4j_password),
+                )
+                self._self_created_driver = True
+            except Exception as e:
+                raise ConnectionError_(
+                    "Neo4j 连接失败",
+                    detail=f"uri={self.neo4j_uri}",
+                    cause=e,
+                ) from e
         else:
             self._self_created_driver = False
+
         self._embedding_mgr = EmbeddingManager()
         self._llm = ChatOpenAI(
-            base_url=os.getenv("ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
-            api_key=os.getenv("ZHIPU_API_KEY", ""),
-            model=os.getenv("ZHIPU_MODEL", "glm-4-flash"),
+            base_url=settings.zhipuai_base_url,
+            api_key=settings.zhipuai_api_key,
+            model=settings.zhipuai_model,
             temperature=0,
             max_tokens=100,
         ).with_structured_output(KeywordsOutput)
@@ -71,7 +96,7 @@ class Neo4jGraphRetriever(BaseRetriever):
         query: str,
         *,
         run_manager: CallbackManagerForRetrieverRun,
-    ) -> List[Document]:
+    ) -> list[Document]:
         context = self._search(query)
         return [Document(page_content=context, metadata={"source": "knowledge_graph"})]
 
@@ -92,24 +117,24 @@ class Neo4jGraphRetriever(BaseRetriever):
     # ==================== 实体检索 ====================
 
     def _extract_keywords_with_llm(self, question: str) -> str:
-        """用 LLM 从问题中提取核心关键词，返回拼接后的字符串"""
+        """用 LLM 从问题中提取核心关键词"""
         try:
             result = self._llm.invoke(question)
             keywords = " ".join(result.keywords)
             if keywords.strip():
-                logger.info(f"LLM 提取关键词: {question} -> {keywords}")
+                logger.info("LLM 提取关键词", question=question, keywords=keywords)
                 return keywords
         except Exception as e:
-            logger.warning(f"LLM 关键词提取失败，使用原始问题: {e}")
+            logger.warning("LLM 关键词提取失败，使用原始问题", error=str(e))
         return question
 
-    def _retrieve_entities(self, question: str) -> List[Dict]:
+    def _retrieve_entities(self, question: str) -> list[dict]:
         """向量语义检索"""
         entities = self._semantic_search(question, top_k=self.max_entities)
         entities.sort(key=lambda e: e["score"], reverse=True)
         return entities[:self.max_entities]
 
-    def _semantic_search(self, question: str, top_k: int = 10) -> List[Dict]:
+    def _semantic_search(self, question: str, top_k: int = 10) -> list[dict]:
         """向量语义检索：先提取关键词再向量化"""
         if not self._embedding_mgr.ready:
             return []
@@ -133,7 +158,6 @@ class Neo4jGraphRetriever(BaseRetriever):
                 """, top_k=top_k, embedding=query_embedding)
                 for record in result:
                     if record["name"]:
-                        # 将 cosine 相似度 (0~1) 映射到与关键词匹配可比的分数范围 (1~5)
                         entities.append({
                             "name": record["name"],
                             "entity_type": record["entity_type"] or "Unknown",
@@ -142,60 +166,65 @@ class Neo4jGraphRetriever(BaseRetriever):
                             "score": record["score"] * 5
                         })
         except Exception as e:
-            logger.warning(f"语义检索失败: {e}")
+            logger.warning("语义检索失败", error=str(e))
 
         return entities
 
-    def _get_qa_for_entities(self, entity_names: List[str]) -> List[Dict]:
+    def _get_qa_for_entities(self, entity_names: list[str]) -> list[dict]:
         """获取与指定实体相关的Q&A"""
         qa_list = []
-        with self._driver.session() as session:
-            cypher = """
-            MATCH (q:Question)-[:ABOUT]->(e)
-            WHERE e.name IN $names
-            OPTIONAL MATCH (a:Answer)-[:RESPONDS_TO]->(q)
-            RETURN q.text as question, q.difficulty as difficulty,
-                   a.text as answer, q.layer as layer
-            """
-            result = session.run(cypher, {"names": entity_names})
-            for record in result:
-                qa_list.append({
-                    "question": record["question"] or "",
-                    "answer": record["answer"] or "",
-                    "difficulty": record["difficulty"] or "",
-                    "layer": record["layer"] or ""
-                })
+        try:
+            with self._driver.session() as session:
+                cypher = """
+                MATCH (q:Question)-[:ABOUT]->(e)
+                WHERE e.name IN $names
+                OPTIONAL MATCH (a:Answer)-[:RESPONDS_TO]->(q)
+                RETURN q.text as question, q.difficulty as difficulty,
+                       a.text as answer, q.layer as layer
+                """
+                result = session.run(cypher, {"names": entity_names})
+                for record in result:
+                    qa_list.append({
+                        "question": record["question"] or "",
+                        "answer": record["answer"] or "",
+                        "difficulty": record["difficulty"] or "",
+                        "layer": record["layer"] or ""
+                    })
+        except Exception as e:
+            logger.warning("获取QA失败", error=str(e))
         return qa_list
 
-    def _get_layers_for_entities(self, entity_names: List[str]) -> List[Dict]:
+    def _get_layers_for_entities(self, entity_names: list[str]) -> list[dict]:
         """获取实体所属的层级信息"""
         layers = []
         seen = set()
-        with self._driver.session() as session:
-            cypher = """
-            MATCH (l:Layer)-[:CONTAINS]->(e)
-            WHERE e.name IN $names
-            RETURN l.name as name, l.layer_number as num, l.description as description
-            ORDER BY num
-            """
-            result = session.run(cypher, {"names": entity_names})
-            for record in result:
-                lname = record["name"]
-                if lname not in seen:
-                    layers.append({
-                        "name": lname,
-                        "number": record["num"],
-                        "description": record["description"] or ""
-                    })
-                    seen.add(lname)
+        try:
+            with self._driver.session() as session:
+                cypher = """
+                MATCH (l:Layer)-[:CONTAINS]->(e)
+                WHERE e.name IN $names
+                RETURN l.name as name, l.layer_number as num, l.description as description
+                ORDER BY num
+                """
+                result = session.run(cypher, {"names": entity_names})
+                for record in result:
+                    lname = record["name"]
+                    if lname not in seen:
+                        layers.append({
+                            "name": lname,
+                            "number": record["num"],
+                            "description": record["description"] or ""
+                        })
+                        seen.add(lname)
+        except Exception as e:
+            logger.warning("获取层级信息失败", error=str(e))
         return layers
 
     # ==================== 上下文构建 ====================
 
-    def _build_context(self, entities: List[Dict], qa_list: List[Dict], layers: List[Dict]) -> str:
+    def _build_context(self, entities: list[dict], qa_list: list[dict], layers: list[dict]) -> str:
         parts = []
 
-        # 层级概述
         if layers:
             parts.append("## 相关层级\n")
             for layer in layers:
@@ -203,7 +232,6 @@ class Neo4jGraphRetriever(BaseRetriever):
                 if layer.get("description"):
                     parts.append(f"  {layer['description'][:200]}")
 
-        # 实体信息
         parts.append("\n## 相关实体\n")
         for entity in entities[:10]:
             layer_tag = f" [{entity['layer']}]" if entity.get("layer") else ""
@@ -211,7 +239,6 @@ class Neo4jGraphRetriever(BaseRetriever):
             if entity.get("description"):
                 parts.append(f"  {entity['description'][:200]}")
 
-        # 相关实体间关系
         entity_names = [e["name"] for e in entities[:10]]
         relationships = self._get_relationships_between(entity_names)
         if relationships:
@@ -221,7 +248,6 @@ class Neo4jGraphRetriever(BaseRetriever):
                 if rel.get("description"):
                     parts.append(f"  {rel['description'][:150]}")
 
-        # Q&A
         if qa_list:
             parts.append("\n## 相关问答\n")
             for qa in qa_list[:5]:
@@ -231,33 +257,36 @@ class Neo4jGraphRetriever(BaseRetriever):
 
         return "\n".join(parts)
 
-    def _get_relationships_between(self, names: List[str]) -> List[Dict]:
+    def _get_relationships_between(self, names: list[str]) -> list[dict]:
         """获取指定节点集之间的关系"""
         rels = []
         if not names:
             return rels
-        with self._driver.session() as session:
-            cypher = """
-            MATCH (a)-[r]->(b)
-            WHERE a.name IN $names AND b.name IN $names
-            RETURN a.name as start, type(r) as rel_type, b.name as end,
-                   r.description as description
-            LIMIT 20
-            """
-            result = session.run(cypher, {"names": names})
-            for record in result:
-                rels.append({
-                    "start": record["start"],
-                    "type": record["rel_type"],
-                    "end": record["end"],
-                    "description": record["description"] or ""
-                })
+        try:
+            with self._driver.session() as session:
+                cypher = """
+                MATCH (a)-[r]->(b)
+                WHERE a.name IN $names AND b.name IN $names
+                RETURN a.name as start, type(r) as rel_type, b.name as end,
+                       r.description as description
+                LIMIT 20
+                """
+                result = session.run(cypher, {"names": names})
+                for record in result:
+                    rels.append({
+                        "start": record["start"],
+                        "type": record["rel_type"],
+                        "end": record["end"],
+                        "description": record["description"] or ""
+                    })
+        except Exception as e:
+            logger.warning("获取关系失败", error=str(e))
         return rels
 
     # ==================== 检索 + 可视化（合并接口） ====================
 
-    def search_with_graph(self, question: str) -> Dict[str, Any]:
-        """一次检索同时返回文本上下文和可视化图数据，避免重复调用 _retrieve_entities"""
+    def search_with_graph(self, question: str) -> dict:
+        """一次检索同时返回文本上下文和可视化图数据"""
         entities = self._retrieve_entities(question)
         if not entities:
             return {
@@ -266,20 +295,16 @@ class Neo4jGraphRetriever(BaseRetriever):
             }
 
         entity_names = [e["name"] for e in entities]
-
-        # 文本上下文
         qa_list = self._get_qa_for_entities(entity_names)
         layers = self._get_layers_for_entities(entity_names)
         context = self._build_context(entities, qa_list, layers)
-
-        # 可视化数据 — 基于已检索的实体扩展邻居
         graph_data = self._build_graph_data(entities)
 
         return {"context": context, "graph_data": graph_data}
 
-    def _build_graph_data(self, entities: List[Dict]) -> Dict[str, Any]:
+    def _build_graph_data(self, entities: list[dict]) -> dict:
         """基于已检索实体构建可视化数据"""
-        graph_data: Dict[str, Any] = {"nodes": [], "relationships": []}
+        graph_data: dict = {"nodes": [], "relationships": []}
         try:
             core_entities = [e for e in entities if e.get("score", 0) >= 1.0]
             if not core_entities:
@@ -287,7 +312,6 @@ class Neo4jGraphRetriever(BaseRetriever):
             core_names = [e["name"] for e in core_entities[:10]]
 
             with self._driver.session() as session:
-                # 扩展邻居
                 neighbor_names = set()
                 for src_name in core_names:
                     try:
@@ -305,11 +329,10 @@ class Neo4jGraphRetriever(BaseRetriever):
                             if nn:
                                 neighbor_names.add(nn)
                     except Exception as ex:
-                        logger.debug(f"获取 {src_name} 邻居失败: {ex}")
+                        logger.debug("获取邻居失败", node=src_name, error=str(ex))
 
                 all_names = core_names + list(neighbor_names)
 
-                # 获取关系
                 relationships = []
                 if all_names:
                     result = session.run("""
@@ -327,7 +350,6 @@ class Neo4jGraphRetriever(BaseRetriever):
                             "type": record["rel_type"]
                         })
 
-                # 只保留有连接的节点
                 connected_names = set()
                 for rel in relationships:
                     connected_names.add(rel["start"]["name"])
@@ -366,13 +388,13 @@ class Neo4jGraphRetriever(BaseRetriever):
                 graph_data["relationships"] = relationships
 
         except Exception as e:
-            logger.warning(f"构建可视化数据失败: {e}")
+            logger.warning("构建可视化数据失败", error=str(e))
 
         return graph_data
 
     # ==================== 可视化辅助 ====================
 
-    def get_graph_data_for_visualization(self, question: str) -> Dict[str, Any]:
+    def get_graph_data_for_visualization(self, question: str) -> dict:
         """根据问题获取图谱可视化数据"""
         graph_data = {"nodes": [], "relationships": []}
         try:
@@ -387,7 +409,6 @@ class Neo4jGraphRetriever(BaseRetriever):
 
                 core_names = [e["name"] for e in core_entities[:10]]
 
-                # 扩展邻居
                 neighbor_names = set()
                 for src_name in core_names:
                     try:
@@ -405,11 +426,10 @@ class Neo4jGraphRetriever(BaseRetriever):
                             if nn:
                                 neighbor_names.add(nn)
                     except Exception as ex:
-                        logger.debug(f"获取 {src_name} 邻居失败: {ex}")
+                        logger.debug("获取邻居失败", node=src_name, error=str(ex))
 
                 all_names = core_names + list(neighbor_names)
 
-                # 获取关系
                 relationships = []
                 if all_names:
                     result = session.run("""
@@ -427,7 +447,6 @@ class Neo4jGraphRetriever(BaseRetriever):
                             "type": record["rel_type"]
                         })
 
-                # 只保留有连接的节点
                 connected_names = set()
                 for rel in relationships:
                     connected_names.add(rel["start"]["name"])
@@ -466,75 +485,76 @@ class Neo4jGraphRetriever(BaseRetriever):
                 graph_data["relationships"] = relationships
 
         except Exception as e:
-            logger.warning(f"获取图谱数据失败: {e}")
+            logger.warning("获取图谱数据失败", error=str(e))
 
         return graph_data
 
     # ==================== 图谱统计 ====================
 
-    def get_graph_stats(self) -> Dict[str, Any]:
+    def get_graph_stats(self) -> dict:
         stats = {}
-        with self._driver.session() as session:
-            try:
-                result = session.run("MATCH (n) RETURN count(n) as count")
-                stats["entity_count"] = result.single()["count"]
-            except Exception:
-                stats["entity_count"] = 0
+        try:
+            with self._driver.session() as session:
+                try:
+                    result = session.run("MATCH (n) RETURN count(n) as count")
+                    stats["entity_count"] = result.single()["count"]
+                except Exception:
+                    stats["entity_count"] = 0
 
-            try:
-                result = session.run("""
-                    MATCH (n)
-                    WHERE n.name IS NOT NULL
-                    RETURN labels(n)[0] as type, count(n) as count
-                    ORDER BY count DESC LIMIT 20
-                """)
-                stats["nodes_by_type"] = {r["type"]: r["count"] for r in result if r["type"]}
-            except Exception:
-                stats["nodes_by_type"] = {}
+                try:
+                    result = session.run("""
+                        MATCH (n)
+                        WHERE n.name IS NOT NULL
+                        RETURN labels(n)[0] as type, count(n) as count
+                        ORDER BY count DESC LIMIT 20
+                    """)
+                    stats["nodes_by_type"] = {r["type"]: r["count"] for r in result if r["type"]}
+                except Exception:
+                    stats["nodes_by_type"] = {}
 
-            try:
-                result = session.run("MATCH ()-[r]->() RETURN count(r) as count")
-                stats["relationship_count"] = result.single()["count"]
-            except Exception:
-                stats["relationship_count"] = 0
+                try:
+                    result = session.run("MATCH ()-[r]->() RETURN count(r) as count")
+                    stats["relationship_count"] = result.single()["count"]
+                except Exception:
+                    stats["relationship_count"] = 0
 
-            # 层级统计
-            try:
-                result = session.run("""
-                    MATCH (l:Layer)
-                    OPTIONAL MATCH (l)-[:CONTAINS]->(e:Entity)
-                    RETURN l.name as layer, l.layer_number as num,
-                           count(e) as entity_count
-                    ORDER BY num
-                """)
-                stats["layers"] = {}
-                for r in result:
-                    stats["layers"][r["layer"]] = r["entity_count"]
-            except Exception:
-                stats["layers"] = {}
+                try:
+                    result = session.run("""
+                        MATCH (l:Layer)
+                        OPTIONAL MATCH (l)-[:CONTAINS]->(e:Entity)
+                        RETURN l.name as layer, l.layer_number as num,
+                               count(e) as entity_count
+                        ORDER BY num
+                    """)
+                    stats["layers"] = {}
+                    for r in result:
+                        stats["layers"][r["layer"]] = r["entity_count"]
+                except Exception:
+                    stats["layers"] = {}
 
-            # Q&A统计
-            try:
-                result = session.run("MATCH (q:Question) RETURN count(q) as count")
-                stats["question_count"] = result.single()["count"]
-            except Exception:
-                stats["question_count"] = 0
+                try:
+                    result = session.run("MATCH (q:Question) RETURN count(q) as count")
+                    stats["question_count"] = result.single()["count"]
+                except Exception:
+                    stats["question_count"] = 0
 
-            stats["totalNodes"] = stats["entity_count"]
-            stats["node_count"] = stats["entity_count"]
+                stats["totalNodes"] = stats["entity_count"]
+                stats["node_count"] = stats["entity_count"]
+        except Exception as e:
+            logger.warning("获取图谱统计失败", error=str(e))
 
         return stats
 
     # ==================== Web API 辅助查询 ====================
 
-    def keyword_search(self, query: str, limit: int = 10) -> List[Dict]:
-        """基于向量语义的节点搜索（替代原有关键词正则匹配）"""
+    def keyword_search(self, query: str, limit: int = 10) -> list[dict]:
+        """基于向量语义的节点搜索"""
         if not query.strip():
             return []
         results = self._semantic_search(query, top_k=limit)
         return results
 
-    def get_neighbors(self, node_name: str, depth: int = 2) -> List[Dict]:
+    def get_neighbors(self, node_name: str, depth: int = 2) -> list[dict]:
         if depth == 1:
             cypher = """
             MATCH (start {name: $node_name})-[r]-(neighbor)
@@ -553,39 +573,49 @@ class Neo4jGraphRetriever(BaseRetriever):
             RETURN DISTINCT neighbor, labels(neighbor) as types, length(path) as distance
             ORDER BY distance, labels(neighbor)[0] LIMIT 50
             """
-        with self._driver.session() as session:
-            result = session.run(cypher, {"node_name": node_name})
-            neighbors = []
-            for record in result:
-                neighbor_data = dict(record["neighbor"])
-                types = record["types"]
-                if isinstance(types, list) and types:
-                    neighbor_data["type"] = types[0]
-                else:
-                    neighbor_data["type"] = str(types) if types else "Unknown"
-                neighbor_data["distance"] = record["distance"]
-                neighbors.append(neighbor_data)
-            return neighbors
+        try:
+            with self._driver.session() as session:
+                result = session.run(cypher, {"node_name": node_name})
+                neighbors = []
+                for record in result:
+                    neighbor_data = dict(record["neighbor"])
+                    types = record["types"]
+                    if isinstance(types, list) and types:
+                        neighbor_data["type"] = types[0]
+                    else:
+                        neighbor_data["type"] = str(types) if types else "Unknown"
+                    neighbor_data["distance"] = record["distance"]
+                    neighbors.append(neighbor_data)
+                return neighbors
+        except Exception as e:
+            logger.warning("获取节点邻居失败", node=node_name, error=str(e))
+            raise ConnectionError_(
+                "获取节点邻居失败",
+                detail=f"node={node_name}",
+                cause=e,
+            ) from e
 
-    def get_subgraph_by_query(self, query: str, limit: int = 20) -> Dict:
+    def get_subgraph_by_query(self, query: str, limit: int = 20) -> dict:
         nodes = self.keyword_search(query, limit)
         if not nodes:
             return {"nodes": [], "relationships": []}
 
         node_names = [n.get("name") for n in nodes if n.get("name")]
-        cypher = """
-        MATCH (n1)-[r]-(n2)
-        WHERE n1.name IN $node_names AND n2.name IN $node_names
-        RETURN n1, type(r) as rel_type, n2
-        """
-        with self._driver.session() as session:
-            result = session.run(cypher, {"node_names": node_names})
-            relationships = []
-            for record in result:
-                relationships.append({
-                    "type": record["rel_type"],
-                    "start": dict(record["n1"]),
-                    "end": dict(record["n2"]),
-                })
-            return {"nodes": nodes, "relationships": relationships}
-
+        try:
+            with self._driver.session() as session:
+                result = session.run("""
+                MATCH (n1)-[r]-(n2)
+                WHERE n1.name IN $node_names AND n2.name IN $node_names
+                RETURN n1, type(r) as rel_type, n2
+                """, {"node_names": node_names})
+                relationships = []
+                for record in result:
+                    relationships.append({
+                        "type": record["rel_type"],
+                        "start": dict(record["n1"]),
+                        "end": dict(record["n2"]),
+                    })
+                return {"nodes": nodes, "relationships": relationships}
+        except Exception as e:
+            logger.warning("获取子图失败", error=str(e))
+            return {"nodes": nodes, "relationships": []}

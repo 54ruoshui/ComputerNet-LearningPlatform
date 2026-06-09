@@ -6,25 +6,28 @@ GraphRAG Web 界面
 import os
 import re
 import sys
-import json
-import logging
+import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from dotenv import load_dotenv
+import structlog
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from src.exceptions import GraphRAGError, ConfigError, ConnectionError_
+from src.logging_config import setup_logging, new_request_id, request_id_var, session_id_var
+from src.settings import get_settings
 
 # 添加项目根目录到 Python 路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-load_dotenv()
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# 初始化日志
+settings = get_settings()
+setup_logging(log_level=settings.log_level, log_format=settings.log_format)
+logger = structlog.get_logger(__name__)
 
 # 路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -35,11 +38,25 @@ generated_images_dir = os.path.join(project_root, 'data', 'generated_images')
 # FastAPI 实例
 app = FastAPI(title="GraphRAG 知识图谱问答系统", version="2.0")
 
+# ==================== 中间件 ====================
+
+from web.middleware import APIKeyMiddleware
+app.add_middleware(APIKeyMiddleware)
+
+
+@app.middleware("http")
+async def inject_request_id(request: Request, call_next):
+    """每个请求注入 request_id 并记录到上下文"""
+    rid = new_request_id()
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = rid
+    return response
+
+
 # 静态文件和模板
 app.mount("/static", StaticFiles(directory=static_folder), name="static")
 templates = Jinja2Templates(directory=template_folder)
 
-# 挂载本地生成的图片目录
 os.makedirs(generated_images_dir, exist_ok=True)
 app.mount("/generated_images", StaticFiles(directory=generated_images_dir), name="generated_images")
 
@@ -50,31 +67,57 @@ mastery_tracker = None
 _all_entity_names: Optional[List[str]] = None
 
 
-# ==================== Pydantic 请求模型 ====================
+# ==================== Pydantic 请求模型（带校验） ====================
 
 class QueryRequest(BaseModel):
-    question: str
+    question: str = Field(..., min_length=1, max_length=2000, description="用户问题")
     session_id: Optional[str] = None
 
 
 class ExportRequest(BaseModel):
-    query: str
+    query: str = Field(..., min_length=1, max_length=500, description="导出查询")
 
 
 class GenerateImageRequest(BaseModel):
     graph_data: dict
-    question: str
+    question: str = Field(..., min_length=1, max_length=500)
 
 
 class MasteryRequest(BaseModel):
-    session_id: str
-    entity_name: str
+    session_id: str = Field(..., min_length=1, max_length=200)
+    entity_name: str = Field(..., min_length=1, max_length=200)
     mastered: bool
 
 
 class MasteryBatchRequest(BaseModel):
-    session_id: str
+    session_id: str = Field(..., min_length=1, max_length=200)
     entities: List[Dict]
+
+
+# ==================== 全局异常处理 ====================
+
+@app.exception_handler(GraphRAGError)
+async def graphrag_error_handler(request: Request, exc: GraphRAGError):
+    """统一处理 GraphRAG 自定义异常"""
+    status_map = {
+        ConfigError: 500,
+        ConnectionError_: 503,
+    }
+    status = status_map.get(type(exc), 500)
+    logger.error(
+        "GraphRAG 错误",
+        error=exc.message,
+        detail=exc.detail,
+        error_type=type(exc).__name__,
+    )
+    return JSONResponse(
+        status_code=status,
+        content={
+            "error": type(exc).__name__,
+            "message": exc.message,
+            "detail": exc.detail,
+        },
+    )
 
 
 # ==================== 初始化函数 ====================
@@ -89,10 +132,10 @@ def init_langgraph_engine():
         langgraph_engine = GraphRAGAgent(config)
         logger.info("GraphRAG ReAct Agent 初始化完成")
         return langgraph_engine
+    except GraphRAGError:
+        raise
     except Exception as e:
-        logger.error(f"GraphRAG ReAct Agent 初始化失败: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error("GraphRAG ReAct Agent 初始化失败", error=str(e))
         langgraph_engine = None
         return None
 
@@ -109,7 +152,7 @@ def init_image_generator():
             logger.warning("Graphviz 未安装或不可用，图片生成功能已禁用")
         return image_generator
     except Exception as e:
-        logger.error(f"Graphviz 图片生成器初始化失败: {e}")
+        logger.error("Graphviz 图片生成器初始化失败", error=str(e))
         image_generator = None
         return None
 
@@ -131,7 +174,7 @@ def init_mastery_tracker():
         logger.info("掌握追踪器初始化完成")
         return mastery_tracker
     except Exception as e:
-        logger.error(f"掌握追踪器初始化失败: {e}")
+        logger.error("掌握追踪器初始化失败", error=str(e))
         mastery_tracker = None
         return None
 
@@ -159,8 +202,8 @@ def _extract_entities_from_text(text: str, entity_names: List[str]) -> List[str]
 
 @app.on_event("startup")
 def on_startup():
-    fast_start = os.getenv('FAST_START', 'false').lower() == 'true'
-    if not fast_start:
+    s = get_settings()
+    if not s.fast_start:
         init_langgraph_engine()
         init_image_generator()
         init_mastery_tracker()
@@ -187,6 +230,11 @@ async def index(request: Request):
     return templates.TemplateResponse(request, "integrated_index.html")
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    return JSONResponse(content={}, status_code=204)
+
+
 # ==================== 核心查询 API ====================
 
 @app.post("/api/query")
@@ -194,7 +242,9 @@ async def query(req: QueryRequest):
     """处理查询请求 — LangGraph 引擎（带会话记忆）"""
     engine = _require_engine()
     try:
-        logger.info(f"LangGraph 查询 [会话: {req.session_id}]: {req.question}")
+        if req.session_id:
+            session_id_var.set(req.session_id)
+        logger.info("LangGraph 查询", session_id=req.session_id, question=req.question[:100])
 
         # 构建掌握上下文用于个性化回答
         mastery_context = ""
@@ -241,7 +291,7 @@ async def query(req: QueryRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"查询处理失败: {e}")
+        logger.error("查询处理失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -265,7 +315,7 @@ async def list_sessions():
                 })
         return {"sessions": summaries}
     except Exception as e:
-        logger.error(f"列出会话失败: {e}")
+        logger.error("列出会话失败", error=str(e))
         return {"sessions": []}
 
 
@@ -319,7 +369,7 @@ async def get_all_entities():
                 total += 1
         return {"entities": entities_by_layer, "total": total}
     except Exception as e:
-        logger.error(f"获取实体列表失败: {e}")
+        logger.error("获取实体列表失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -363,7 +413,7 @@ async def get_config():
             "session_memory": langgraph_engine is not None,
             "image_generation": image_generator is not None and image_generator.is_available(),
         },
-        "limits": {"max_query_length": 1000, "max_history_items": 20},
+        "limits": {"max_query_length": 2000, "max_history_items": 20},
     }
 
 
@@ -373,7 +423,7 @@ async def graph_stats():
     try:
         return engine.get_stats()
     except Exception as e:
-        logger.error(f"获取统计信息失败: {e}")
+        logger.error("获取统计信息失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -384,7 +434,7 @@ async def node_neighbors(node_name: str):
         neighbors = engine.retriever.get_neighbors(node_name, depth=2)
         return {"neighbors": neighbors}
     except Exception as e:
-        logger.error(f"获取节点邻居失败: {e}")
+        logger.error("获取节点邻居失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -397,7 +447,7 @@ async def search_nodes(q: str = ""):
         nodes = engine.retriever.keyword_search(q, limit=20)
         return {"nodes": nodes}
     except Exception as e:
-        logger.error(f"搜索节点失败: {e}")
+        logger.error("搜索节点失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -408,7 +458,7 @@ async def export_graph(req: ExportRequest):
         graph_data = engine.retriever.get_subgraph_by_query(req.query, limit=50)
         return {"graph_data": graph_data, "export_time": datetime.now().isoformat()}
     except Exception as e:
-        logger.error(f"导出图谱失败: {e}")
+        logger.error("导出图谱失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -437,7 +487,7 @@ async def generate_image(req: GenerateImageRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"图片生成失败: {e}")
+        logger.error("图片生成失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -445,21 +495,13 @@ async def generate_image(req: GenerateImageRequest):
 
 def main():
     import uvicorn
-    host = os.getenv('WEB_HOST', '0.0.0.0')
-    port = int(os.getenv('WEB_PORT', '5001'))
-    debug = os.getenv('DEBUG', 'false').lower() == 'true'
-
-    logger.info(f"启动 GraphRAG Web 应用 (FastAPI + LangGraph + 记忆)")
-    logger.info(f"监听地址: http://{host}:{port}")
-    logger.info(f"调试模式: {'启用' if debug else '禁用'}")
-    logger.info("会话记忆: 已启用 (MemorySaver)")
-    logger.info(f"API 文档: http://{host}:{port}/docs")
-
+    s = get_settings()
+    logger.info("启动 GraphRAG Web 应用", host=s.web_host, port=s.web_port, debug=s.debug)
     uvicorn.run(
         "web.graph_rag_web:app",
-        host=host,
-        port=port,
-        reload=debug,
+        host=s.web_host,
+        port=s.web_port,
+        reload=s.debug,
     )
 
 
