@@ -16,7 +16,7 @@
 
 ## 主页展示
 
-![主页截图](data/generated_images/homeimg.png)
+![主页截图](docs/homeimg.png)
 
 ## 技术栈
 
