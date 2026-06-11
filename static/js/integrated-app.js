@@ -81,19 +81,25 @@ function toggleVoiceRecognition() {
 
 // ==================== Query History ====================
 
-function loadQueryHistory() {
-    const savedHistory = localStorage.getItem('graphrag_history');
-    if (savedHistory) {
-        queryHistory = JSON.parse(savedHistory);
-        updateHistoryDisplay();
-    }
+async function loadQueryHistory() {
+    try {
+        const res = await fetch('/api/history');
+        if (res.ok) {
+            const data = await res.json();
+            queryHistory = data.list || [];
+            updateHistoryDisplay();
+            return;
+        }
+    } catch (e) { /* fallback to empty */ }
+    queryHistory = [];
+    updateHistoryDisplay();
 }
 
-function saveQueryHistory() {
-    localStorage.setItem('graphrag_history', JSON.stringify(queryHistory));
+async function saveQueryHistory() {
+    // no-op: history is saved per-item via addToHistory
 }
 
-function addToHistory(question, answer, processingTime) {
+async function addToHistory(question, answer, processingTime) {
     const historyItem = {
         question: question,
         answer: answer,
@@ -101,11 +107,17 @@ function addToHistory(question, answer, processingTime) {
         timestamp: new Date().toISOString()
     };
     queryHistory.unshift(historyItem);
-    if (queryHistory.length > 20) {
-        queryHistory = queryHistory.slice(0, 20);
+    if (queryHistory.length > 50) {
+        queryHistory = queryHistory.slice(0, 50);
     }
-    saveQueryHistory();
     updateHistoryDisplay();
+    try {
+        await fetch('/api/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(historyItem)
+        });
+    } catch (e) { /* silently fail */ }
 }
 
 function updateHistoryDisplay() {
@@ -153,11 +165,13 @@ function updateHistoryDisplay() {
     });
 }
 
-function clearHistory() {
+async function clearHistory() {
     if (confirm('确定要清空所有查询历史吗？')) {
         queryHistory = [];
-        saveQueryHistory();
         updateHistoryDisplay();
+        try {
+            await fetch('/api/history', { method: 'DELETE' });
+        } catch (e) { /* silently fail */ }
         showMessage('历史记录已清空', 'success');
     }
 }
@@ -363,7 +377,7 @@ function toggleTheme() {
 }
 
 function loadTheme() {
-    var saved = localStorage.getItem('theme') || 'dark';
+    var saved = localStorage.getItem('theme') || 'light';
     document.body.setAttribute('data-theme', saved);
 }
 

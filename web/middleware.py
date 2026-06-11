@@ -10,7 +10,7 @@ from starlette.responses import JSONResponse
 from src.settings import get_settings
 
 # 白名单路径（不需要认证）
-PUBLIC_PATHS = {"/", "/docs", "/openapi.json", "/redoc", "/api/health"}
+PUBLIC_PATHS = {"/", "/quiz", "/docs", "/openapi.json", "/redoc", "/api/health"}
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):

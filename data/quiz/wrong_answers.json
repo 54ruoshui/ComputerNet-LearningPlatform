@@ -1,0 +1,44 @@
+[
+  {
+    "id": "mcq_import_2",
+    "text": "以下哪种传输介质抗干扰能力最强？",
+    "option_a": "双绞线",
+    "option_b": "同轴电缆",
+    "option_c": "光纤",
+    "option_d": "无线电波",
+    "correct_answer": "C",
+    "explanation": "光纤利用光信号传输，不受电磁干扰影响，抗干扰能力最强。",
+    "layer": "物理层",
+    "difficulty": "basic",
+    "selected": "B",
+    "time": "2026-06-11T06:05:00.008Z"
+  },
+  {
+    "id": "mcq_import_3",
+    "text": "奈奎斯特定理中，无噪声信道的最大数据传输率公式为？",
+    "option_a": "2W log₂V (bps)",
+    "option_b": "W log₂V (bps)",
+    "option_c": "2W log₂(V+1) (bps)",
+    "option_d": "W log₂(V+1) (bps)",
+    "correct_answer": "A",
+    "explanation": "奈奎斯特定理：最大数据传输率 = 2W log₂V，其中 W 为带宽(Hz)，V 为离散信号电平数。",
+    "layer": "物理层",
+    "difficulty": "medium",
+    "selected": "D",
+    "time": "2026-06-11T06:04:56.462Z"
+  },
+  {
+    "id": "mcq_import_8",
+    "text": "ARP协议的功能是什么？",
+    "option_a": "将域名解析为IP地址",
+    "option_b": "将IP地址解析为MAC地址",
+    "option_c": "将MAC地址解析为IP地址",
+    "option_d": "分配IP地址",
+    "correct_answer": "B",
+    "explanation": "ARP（Address Resolution Protocol）地址解析协议，用于将网络层的IP地址解析为数据链路层的MAC地址。",
+    "layer": "网络层",
+    "difficulty": "basic",
+    "selected": "A",
+    "time": "2026-06-11T06:02:04.244Z"
+  }
+]

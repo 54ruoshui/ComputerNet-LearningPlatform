@@ -14,7 +14,7 @@ class LangGraphRAGConfig:
         self.neo4j_uri = s.neo4j_uri
         self.neo4j_user = s.neo4j_user
         self.neo4j_password = s.neo4j_password
-        self.zhipu_api_key = s.zhipuai_api_key
+        self.zhipuai_api_key = s.zhipuai_api_key
         self.zhipu_model = s.zhipuai_model
         self.zhipu_base_url = s.zhipuai_base_url
         self.max_entities = s.max_entities

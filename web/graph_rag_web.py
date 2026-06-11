@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from src.exceptions import GraphRAGError, ConfigError, ConnectionError_
 from src.logging_config import setup_logging, new_request_id, request_id_var, session_id_var
+from src.services import quiz_storage
 from src.settings import get_settings
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -61,6 +62,7 @@ langgraph_engine = None
 image_generator = None
 entity_service = None
 mastery_service = None
+quiz_service = None
 
 
 # ==================== Pydantic 请求模型（带校验） ====================
@@ -88,6 +90,31 @@ class MasteryRequest(BaseModel):
 class MasteryBatchRequest(BaseModel):
     session_id: str = Field(..., min_length=1, max_length=200)
     entities: List[Dict]
+
+
+class QuizAnswerRequest(BaseModel):
+    question_id: str = Field(..., min_length=1, max_length=100)
+    selected_answer: str = Field(..., pattern="^[ABCD]$")
+
+
+class HistoryItem(BaseModel):
+    question: str
+    answer: str
+    processingTime: float = 0
+    timestamp: str
+
+
+class MCQuestionCreate(BaseModel):
+    text: str = Field(..., min_length=2, max_length=1000)
+    option_a: str = Field(..., min_length=1, max_length=500)
+    option_b: str = Field(..., min_length=1, max_length=500)
+    option_c: str = Field(..., min_length=1, max_length=500)
+    option_d: str = Field(..., min_length=1, max_length=500)
+    correct_answer: str = Field(..., pattern="^[ABCD]$")
+    explanation: str = Field(..., min_length=1, max_length=2000)
+    difficulty: str = Field(..., pattern="^(basic|medium|hard)$")
+    layer: str = Field(..., pattern="^(物理层|数据链路层|网络层|传输层|应用层)$")
+    references: Optional[List[str]] = []
 
 
 # ==================== 全局异常处理 ====================
@@ -171,6 +198,28 @@ def init_mastery_tracker():
         return None
 
 
+def init_quiz_service():
+    global quiz_service
+    try:
+        from src.services.quiz_service import QuizService
+        driver = None
+        if langgraph_engine and hasattr(langgraph_engine, "driver"):
+            driver = langgraph_engine.driver
+        else:
+            from neo4j import GraphDatabase
+            s = get_settings()
+            driver = GraphDatabase.driver(
+                s.neo4j_uri,
+                auth=(s.neo4j_user, s.neo4j_password),
+            )
+        quiz_service = QuizService(driver)
+        quiz_service.create_indexes()
+        logger.info("QuizService 初始化完成")
+    except Exception as e:
+        logger.error("QuizService 初始化失败", error=str(e))
+        quiz_service = None
+
+
 def _require_engine():
     if not langgraph_engine:
         raise HTTPException(status_code=503, detail="LangGraph 引擎未初始化，请检查 Neo4j 和 API 配置")
@@ -183,9 +232,13 @@ def _require_engine():
 def on_startup():
     s = get_settings()
     if not s.fast_start:
-        init_langgraph_engine()
+        try:
+            init_langgraph_engine()
+        except Exception:
+            logger.warning("LangGraph 引擎初始化失败，问答功能不可用")
         init_image_generator()
         init_mastery_tracker()
+        init_quiz_service()
     else:
         logger.info("快速启动模式：系统将在首次查询时初始化")
 
@@ -432,6 +485,153 @@ async def generate_image(req: GenerateImageRequest):
     except Exception as e:
         logger.error("图片生成失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 刷题测验 API ====================
+
+@app.get("/quiz", response_class=HTMLResponse)
+async def quiz_page(request: Request):
+    return templates.TemplateResponse(request, "quiz.html")
+
+
+@app.get("/api/quiz/questions")
+async def get_quiz_questions(
+    layer: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    limit: int = 20,
+):
+    global quiz_service
+    if not quiz_service:
+        if langgraph_engine:
+            init_quiz_service()
+        if not quiz_service:
+            raise HTTPException(status_code=503, detail="Quiz 服务未初始化")
+    try:
+        return quiz_service.get_questions(layer=layer, difficulty=difficulty, limit=limit)
+    except Exception as e:
+        logger.error("获取测验题目失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/quiz/answer")
+async def submit_quiz_answer(req: QuizAnswerRequest):
+    global quiz_service
+    if not quiz_service:
+        if langgraph_engine:
+            init_quiz_service()
+        if not quiz_service:
+            raise HTTPException(status_code=503, detail="Quiz 服务未初始化")
+    try:
+        result = quiz_service.check_answer(req.question_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="题目不存在")
+        return {
+            "correct": req.selected_answer == result["correct_answer"],
+            "correct_answer": result["correct_answer"],
+            "explanation": result["explanation"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("提交答案失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/quiz/stats")
+async def get_quiz_stats():
+    global quiz_service
+    if not quiz_service:
+        if langgraph_engine:
+            init_quiz_service()
+        if not quiz_service:
+            raise HTTPException(status_code=503, detail="Quiz 服务未初始化")
+    try:
+        return quiz_service.get_stats()
+    except Exception as e:
+        logger.error("获取测验统计失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/quiz/questions")
+async def create_quiz_question(req: MCQuestionCreate):
+    global quiz_service
+    if not quiz_service:
+        if langgraph_engine:
+            init_quiz_service()
+        if not quiz_service:
+            raise HTTPException(status_code=503, detail="Quiz 服务未初始化")
+    try:
+        q_id = quiz_service.add_question(req.model_dump())
+        return {"success": True, "question_id": q_id}
+    except Exception as e:
+        logger.error("创建题目失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 错题集 & 已做题目 本地存储 API ====================
+
+class WrongEntry(BaseModel):
+    id: str
+    text: str
+    option_a: str
+    option_b: str
+    option_c: str
+    option_d: str
+    correct_answer: str
+    explanation: str
+    layer: str
+    difficulty: str
+    selected: str
+    time: Optional[str] = None
+
+
+@app.get("/api/quiz/done")
+async def api_get_done_ids():
+    return {"ids": quiz_storage.get_done_ids()}
+
+
+@app.post("/api/quiz/done/{question_id}")
+async def api_mark_done(question_id: str):
+    return {"ids": quiz_storage.mark_done(question_id)}
+
+
+@app.get("/api/quiz/wrong")
+async def api_get_wrong_list():
+    return {"list": quiz_storage.get_wrong_list()}
+
+
+@app.post("/api/quiz/wrong")
+async def api_add_wrong(entry: WrongEntry):
+    return {"list": quiz_storage.add_wrong(entry.model_dump())}
+
+
+@app.delete("/api/quiz/wrong/{question_id}")
+async def api_remove_wrong(question_id: str):
+    return {"list": quiz_storage.remove_wrong(question_id)}
+
+
+@app.delete("/api/quiz/wrong")
+async def api_clear_wrong():
+    quiz_storage.clear_wrong()
+    return {"success": True}
+
+
+# ==================== 查询历史 本地存储 API ====================
+
+@app.get("/api/history")
+async def api_get_history():
+    return {"list": quiz_storage.get_history()}
+
+
+@app.post("/api/history")
+async def api_add_history(item: HistoryItem):
+    return {"list": quiz_storage.add_history(item.model_dump())}
+
+
+@app.delete("/api/history")
+async def api_clear_history():
+    quiz_storage.clear_history()
+    return {"success": True}
 
 
 # ==================== 启动入口 ====================

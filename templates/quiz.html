@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>刷题测验 - GraphRAG</title>
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style-new.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/quiz.css') }}">
+</head>
+<body>
+    <div class="quiz-layout">
+        <!-- 顶部栏 -->
+        <header class="quiz-topbar">
+            <a href="/" class="brand">GraphRAG 刷题测验</a>
+            <a href="/" class="back-link"><i class="fas fa-arrow-left"></i> 返回问答</a>
+        </header>
+
+        <!-- 统计摘要 -->
+        <div class="quiz-stats-row">
+            <div class="stats-item">
+                <i class="fas fa-check-double"></i>
+                <span>已做 <strong id="doneCount">0</strong> 题</span>
+            </div>
+            <div class="stats-item">
+                <i class="fas fa-bookmark"></i>
+                <span>错题 <strong id="wrongBadge" style="display:none;">0</strong></span>
+            </div>
+        </div>
+
+        <!-- Tab 切换 -->
+        <div class="quiz-tabs">
+            <button class="quiz-tab active" data-tab="quiz" onclick="switchTab('quiz')">
+                <i class="fas fa-pen-to-square"></i> 刷题
+            </button>
+            <button class="quiz-tab" data-tab="wrong" onclick="switchTab('wrong')">
+                <i class="fas fa-bookmark"></i> 错题集
+                <span class="tab-badge" id="wrongBadgeTab" style="display:none;">0</span>
+            </button>
+        </div>
+
+        <!-- ===== 刷题面板 ===== -->
+        <div id="quizPanel">
+            <!-- 筛选栏 -->
+            <div class="quiz-filters" id="filterBar">
+                <select id="layerSelect">
+                    <option value="">全部层次</option>
+                    <option value="物理层">物理层</option>
+                    <option value="数据链路层">数据链路层</option>
+                    <option value="网络层">网络层</option>
+                    <option value="传输层">传输层</option>
+                    <option value="应用层">应用层</option>
+                </select>
+                <select id="diffSelect">
+                    <option value="">全部难度</option>
+                    <option value="basic">基础</option>
+                    <option value="medium">中等</option>
+                    <option value="hard">困难</option>
+                </select>
+                <button class="btn-start" id="startBtn" onclick="startQuiz()">开始刷题</button>
+            </div>
+
+            <!-- 计分栏 -->
+            <div class="quiz-score-bar" id="scoreBar" style="display:none;">
+                <div class="score-item">进度 <span class="score-value" id="progressText">0/0</span></div>
+                <div class="score-item">正确 <span class="score-value score-correct" id="correctCount">0</span></div>
+                <div class="score-item">错误 <span class="score-value score-wrong" id="wrongCount">0</span></div>
+                <div class="score-item">正确率 <span class="score-value" id="accuracy">0%</span></div>
+            </div>
+
+            <!-- 空状态 -->
+            <div class="quiz-empty" id="emptyState">
+                <p>选择层次和难度，点击「开始刷题」</p>
+            </div>
+
+            <!-- 答题区 -->
+            <div class="quiz-card" id="quizCard" style="display:none;">
+                <div class="quiz-progress" id="questionProgress"></div>
+                <div class="quiz-question-text" id="questionText"></div>
+                <div class="options-list" id="optionsList"></div>
+                <div class="quiz-actions">
+                    <button class="btn-submit" id="submitBtn" onclick="submitAnswer()" disabled>提交答案</button>
+                    <button class="btn-next" id="nextBtn" onclick="nextQuestion()" style="display:none;">下一题</button>
+                </div>
+                <div class="quiz-explanation" id="explanationBox"></div>
+            </div>
+
+            <!-- 完成页 -->
+            <div class="quiz-complete" id="completePage" style="display:none;">
+                <h2>刷题完成！</h2>
+                <p>你的成绩</p>
+                <div class="final-score"><span id="finalCorrect">0</span> / <span id="finalTotal">0</span></div>
+                <p id="finalAccuracy" style="color:var(--text-3);margin-bottom:24px;"></p>
+                <button class="btn-start" onclick="resetQuiz()">再来一轮</button>
+            </div>
+
+            <!-- 录入表单 -->
+            <div class="quiz-form-toggle" onclick="toggleForm()">
+                <i class="fas fa-plus-circle"></i> 添加新题目
+            </div>
+            <div class="quiz-form" id="addForm">
+                <div class="form-group">
+                    <label>题干</label>
+                    <textarea id="fText" rows="2" placeholder="输入题目内容"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>选项 A</label>
+                        <input id="fA" placeholder="选项 A 内容">
+                    </div>
+                    <div class="form-group">
+                        <label>选项 B</label>
+                        <input id="fB" placeholder="选项 B 内容">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>选项 C</label>
+                        <input id="fC" placeholder="选项 C 内容">
+                    </div>
+                    <div class="form-group">
+                        <label>选项 D</label>
+                        <input id="fD" placeholder="选项 D 内容">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>正确答案</label>
+                        <select id="fAnswer">
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>难度</label>
+                        <select id="fDiff">
+                            <option value="basic">基础</option>
+                            <option value="medium">中等</option>
+                            <option value="hard">困难</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>所属层次</label>
+                    <select id="fLayer">
+                        <option value="物理层">物理层</option>
+                        <option value="数据链路层">数据链路层</option>
+                        <option value="网络层">网络层</option>
+                        <option value="传输层">传输层</option>
+                        <option value="应用层">应用层</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>解析</label>
+                    <textarea id="fExplanation" rows="2" placeholder="解释正确答案的原因"></textarea>
+                </div>
+                <button class="btn-add" onclick="addQuestion()">添加题目</button>
+            </div>
+        </div>
+
+        <!-- ===== 错题集面板 ===== -->
+        <div id="wrongPanel" style="display:none;">
+            <div class="wrong-actions">
+                <button class="btn-retry-wrong" id="retryAllBtn" onclick="retryWrong()" style="display:none;">
+                    <i class="fas fa-rotate"></i> 重做错题
+                </button>
+                <button class="btn-clear-wrong" id="clearWrongBtn" onclick="clearWrongList()" style="display:none;">
+                    <i class="fas fa-trash-can"></i> 清空
+                </button>
+            </div>
+            <div id="wrongListContainer"></div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="quiz-toast" id="toast"></div>
+
+    <script src="{{ url_for('static', path='js/quiz-app.js') }}"></script>
+</body>
+</html>
