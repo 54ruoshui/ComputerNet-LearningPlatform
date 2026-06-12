@@ -17,11 +17,13 @@ class EntityRetriever:
 
     def __init__(self, driver, embedding_mgr: EmbeddingManager,
                  keyword_extractor: KeywordExtractor,
-                 max_entities: int = 20):
+                 max_entities: int = 20,
+                 viz_service=None):
         self._driver = driver
         self._embedding_mgr = embedding_mgr
         self._keyword_extractor = keyword_extractor
         self.max_entities = max_entities
+        self._viz_service = viz_service
 
     # ==================== 主检索 ====================
 
@@ -51,10 +53,10 @@ class EntityRetriever:
         layers = self.get_layers_for_entities(entity_names)
         context = self.build_context(entities, qa_list, layers)
 
-        # 延迟导入避免循环依赖
-        from src.services.graph_visualization_service import GraphVisualizationService
-        viz = GraphVisualizationService(self._driver, self.retrieve_entities)
-        graph_data = viz.build_graph_data(entities)
+        if self._viz_service:
+            graph_data = self._viz_service.build_graph_data(entities)
+        else:
+            graph_data = {"nodes": [], "relationships": []}
 
         return {"context": context, "graph_data": graph_data}
 
@@ -230,7 +232,7 @@ class EntityRetriever:
     # ==================== Web API 辅助 ====================
 
     def keyword_search(self, query: str, limit: int = 10) -> list[dict]:
-        """基于向量语义的节点搜索"""
+        """节点搜索：提取关键词后通过向量语义检索匹配节点"""
         if not query.strip():
             return []
         return self.semantic_search(query, top_k=limit)

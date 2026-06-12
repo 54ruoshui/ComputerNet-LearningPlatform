@@ -60,7 +60,6 @@ class GraphStatsService:
                 except Exception:
                     stats["question_count"] = 0
 
-                stats["totalNodes"] = stats["entity_count"]
                 stats["node_count"] = stats["entity_count"]
         except Exception as e:
             logger.warning("获取图谱统计失败", error=str(e))

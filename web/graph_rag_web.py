@@ -4,8 +4,6 @@ GraphRAG Web 界面
 """
 
 import os
-import sys
-import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -20,8 +18,6 @@ from src.exceptions import GraphRAGError, ConfigError, ConnectionError_
 from src.logging_config import setup_logging, new_request_id, request_id_var, session_id_var
 from src.services import quiz_storage
 from src.settings import get_settings
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 初始化日志
 settings = get_settings()

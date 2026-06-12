@@ -889,9 +889,7 @@ async function exportSubgraph() {
 // ==================== Display Answer (legacy compat) ====================
 
 function displayAnswer(data) {
-    // This function is kept for backward compatibility but submitQuery
-    // now handles message rendering directly
-    console.log('displayAnswer called (legacy compat)');
+    // Legacy compat — submitQuery now handles rendering directly.
 }
 
 // ==================== Helpers ====================

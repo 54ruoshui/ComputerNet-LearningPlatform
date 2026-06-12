@@ -6,13 +6,13 @@
 import os
 import re
 import hashlib
-import logging
 import platform
 import time
 from collections import OrderedDict
 from typing import Optional
 
 import graphviz
+import structlog
 
 # 如果 Graphviz 不在系统 PATH 中，手动指定安装路径
 if platform.system() == "Windows":
@@ -26,7 +26,7 @@ IMAGE_SAVE_DIR = os.path.join(
     "data", "generated_images",
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # 关系类型中文映射表
 REL_TYPE_MAP = {

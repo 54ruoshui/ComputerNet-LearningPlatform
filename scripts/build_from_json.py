@@ -329,7 +329,6 @@ class LayerGraphBuilder:
 def load_layer_file(layer_number: int = None) -> List[Dict]:
     """加载层级JSON文件"""
     if layer_number is not None:
-        files = [LAYERS_DIR / f"{layer_number}_*.json"]
         matching = list(LAYERS_DIR.glob(f"{layer_number}_*.json"))
         if not matching:
             logger.error(f"未找到层级 {layer_number} 的文件")

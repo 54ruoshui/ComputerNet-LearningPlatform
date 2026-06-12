@@ -137,17 +137,19 @@ class GraphRAGAgent:
         # 服务层（直接创建，共享 driver）
         embedding_mgr = EmbeddingManager()
         keyword_extractor = KeywordExtractor()
+        self._stats_service = GraphStatsService(driver=self.driver)
+        self._viz_service = GraphVisualizationService(
+            driver=self.driver,
+            entity_retriever_fn=None,  # 将在 EntityRetriever 创建后设置
+        )
         self._entity_retriever = EntityRetriever(
             driver=self.driver,
             embedding_mgr=embedding_mgr,
             keyword_extractor=keyword_extractor,
             max_entities=self.config.max_entities,
+            viz_service=self._viz_service,
         )
-        self._stats_service = GraphStatsService(driver=self.driver)
-        self._viz_service = GraphVisualizationService(
-            driver=self.driver,
-            entity_retriever_fn=self._entity_retriever.retrieve_entities,
-        )
+        self._viz_service._retrieve_entities = self._entity_retriever.retrieve_entities
 
         # 会话记忆
         self.checkpointer = MemorySaver()

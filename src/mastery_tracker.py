@@ -5,10 +5,11 @@
 
 import sqlite3
 import threading
-import logging
 from typing import Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
 class MasteryTracker:
