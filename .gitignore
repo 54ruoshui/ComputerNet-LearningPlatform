@@ -13,6 +13,7 @@ build/
 # Data (generated / large files)
 data/checkpoints/
 data/generated_images/
+data/layers/
 *.pdf
 *.txt
 !requirements.txt
