@@ -85,6 +85,7 @@ class GraphVisualizationService:
                         e = name_to_entity[name]
                         nodes.append({
                             "name": name,
+                            "name_en": e.get("name_en") or "",
                             "type": e.get("entity_type") or "Entity",
                             "description": e.get("description") or "",
                         })
@@ -93,17 +94,19 @@ class GraphVisualizationService:
                             nr = session.run("""
                                 MATCH (n {name: $name})
                                 RETURN COALESCE(n.entity_type, labels(n)[0]) as type,
-                                       COALESCE(n.description, '') as description
+                                       COALESCE(n.description, '') as description,
+                                       COALESCE(n.name_en, '') as name_en
                                 LIMIT 1
                             """, {"name": name})
                             rec = nr.single()
                             nodes.append({
                                 "name": name,
+                                "name_en": rec["name_en"] if rec else "",
                                 "type": rec["type"] if rec else "Node",
                                 "description": (rec["description"] or "") if rec else "",
                             })
                         except Exception:
-                            nodes.append({"name": name, "type": "Node", "description": ""})
+                            nodes.append({"name": name, "name_en": "", "type": "Node", "description": ""})
 
                 graph_data["nodes"] = nodes[:20]
                 graph_data["relationships"] = relationships

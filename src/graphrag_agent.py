@@ -5,9 +5,12 @@ GraphRAG ReAct Agent（基于 LangGraph create_react_agent）
 由 LLM 自主决策调用哪些工具来回答用户问题。
 """
 
+import asyncio
 import json
+import sqlite3
 import uuid
 import time
+from typing import AsyncGenerator
 
 import structlog
 from langchain_openai import ChatOpenAI
@@ -15,6 +18,8 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, System
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from neo4j import GraphDatabase
 
@@ -126,6 +131,7 @@ class GraphRAGAgent:
                 model=self.config.zhipu_model,
                 temperature=self.config.temperature,
                 max_tokens=self.config.max_tokens,
+                streaming=True,
             )
         except Exception as e:
             raise LLMError(
@@ -151,8 +157,14 @@ class GraphRAGAgent:
         )
         self._viz_service._retrieve_entities = self._entity_retriever.retrieve_entities
 
-        # 会话记忆
-        self.checkpointer = MemorySaver()
+        # 会话记忆（sqlite 持久化 / memory 非持久化）
+        if self.config.memory_backend == "sqlite":
+            self._db_conn = sqlite3.connect(self.config.sqlite_db_path, check_same_thread=False)
+            self.checkpointer = SqliteSaver(self._db_conn)
+            self.checkpointer.setup()
+        else:
+            self._db_conn = None
+            self.checkpointer = MemorySaver()
         self._sessions: set = set()
 
         # 构建工具（闭包绑定服务）
@@ -174,23 +186,24 @@ class GraphRAGAgent:
     def _build_system_prompt() -> str:
         return """你是一个计算机网络领域的资深专家和优秀教师。
 
-# 重要：必须调用工具
-对于用户的每一个问题，你**必须首先调用 knowledge_search 工具**进行检索，然后根据工具返回的结果来回答。
-绝对不要跳过工具调用直接回答问题。即使你认为你知道答案，也必须先调用 knowledge_search。
+# 工具使用
+- 当问题涉及计算机网络的概念、协议、设备或各层知识时，调用 knowledge_search 检索知识图谱。
+- 当需要了解图谱规模或统计数据时，调用 graph_statistics。
+- 当需要查找特定节点或探索实体关系时，调用 node_search 或 node_neighbors。
+- 对于问候、闲聊、追问已知上下文内容、或无需外部知识即可回答的一般性问题，可以直接回答，不必强制调用工具。
 
 # 回答要求
-1. **详细充分**：回答应当详尽充实，每个知识点充分展开解释，不少于500字
+1. **详细充分**：回答应当详尽充实，每个知识点充分展开解释
 2. **结构清晰**：使用多级标题、编号列表、对比表格组织内容
 3. **解释原理**：不仅给出"是什么"，还要解释"为什么"和"怎么工作的"
-4. **举例说明**：必须为每个核心概念给出一个具体的、贴近实际的例子
+4. **举例说明**：为核心概念给出具体的、贴近实际的例子
 5. **对比分析**：涉及多个概念时，主动进行对比，突出差异和联系
 6. **总结归纳**：在回答末尾给出简洁的总结或要点回顾
 
-# 严格约束
-1. 必须仅基于工具返回的信息回答，不允许使用外部知识编造内容
-2. 如果工具返回信息不足，明确说明缺少哪些信息
-3. 使用中文回答，语言流畅自然，使用 Markdown 格式
-4. 对于用户之前对话的延续，结合上下文连贯回答"""
+# 约束
+1. 技术问题需基于工具返回的信息回答，信息不足时明确说明
+2. 使用中文回答，语言流畅自然，使用 Markdown 格式
+3. 结合对话上下文连贯回答"""
 
     # -------------------- 主查询入口 --------------------
 
@@ -269,6 +282,80 @@ class GraphRAGAgent:
                 "session_id": session_id,
             }
 
+    # -------------------- 流式查询 --------------------
+
+    async def query_stream(
+        self,
+        question: str,
+        session_id: str | None = None,
+        mastery_context: str = "",
+    ) -> AsyncGenerator[str, None]:
+        """流式查询：异步生成器，每步产出 SSE 格式的事件数据"""
+        start_time = time.time()
+
+        if not session_id:
+            session_id = str(uuid.uuid4())
+
+        session_id_var.set(session_id)
+        self._sessions.add(session_id)
+        config = {"configurable": {"thread_id": session_id}}
+
+        messages = []
+        if mastery_context:
+            messages.append(SystemMessage(content=mastery_context))
+        messages.append(HumanMessage(content=question))
+
+        try:
+            async for event in self._do_stream(messages, config):
+                yield event
+
+            elapsed = time.time() - start_time
+            yield f"event: done\ndata: {json.dumps({'session_id': session_id, 'elapsed': round(elapsed, 2)}, ensure_ascii=False)}\n\n"
+
+        except Exception as e:
+            logger.error("流式查询失败", error=str(e), session_id=session_id)
+            yield f"event: error\ndata: {json.dumps({'msg': str(e)}, ensure_ascii=False)}\n\n"
+
+    async def _do_stream(self, messages: list, config: dict):
+        import aiosqlite as _aiosqlite
+        _conn = _aiosqlite.connect(self.config.sqlite_db_path)
+        _checkpointer = AsyncSqliteSaver(_conn)
+        await _checkpointer.setup()
+        _agent = create_react_agent(
+            model=self.llm, tools=self.tools,
+            prompt=self._build_system_prompt(),
+            checkpointer=_checkpointer,
+        )
+        try:
+            async for event in _agent.astream_events(
+                {"messages": messages}, config, version="v2"
+            ):
+                kind = event.get("event", "")
+
+                if kind == "on_tool_start":
+                    tool_name = event.get("name", "")
+                    yield f"event: status\ndata: {json.dumps({'msg': f'检索中：{tool_name}...'}, ensure_ascii=False)}\n\n"
+
+                elif kind == "on_tool_end":
+                    if event.get("name") == "knowledge_search":
+                        output = event.get("data", {}).get("output")
+                        try:
+                            content = output.content if hasattr(output, "content") else str(output)
+                            parsed = json.loads(content)
+                            if isinstance(parsed, dict) and "graph_data" in parsed:
+                                gd = parsed["graph_data"]
+                                if gd.get("nodes"):
+                                    yield f"event: graph\ndata: {json.dumps(gd, ensure_ascii=False)}\n\n"
+                        except (json.JSONDecodeError, TypeError, AttributeError):
+                            pass
+
+                elif kind == "on_chat_model_stream":
+                    chunk = event.get("data", {}).get("chunk")
+                    if chunk and hasattr(chunk, "content") and chunk.content:
+                        yield f"event: token\ndata: {json.dumps({'content': chunk.content}, ensure_ascii=False)}\n\n"
+        finally:
+            await _conn.close()
+
     # -------------------- 会话管理 --------------------
 
     def get_session_history(self, session_id: str) -> list[dict]:
@@ -289,6 +376,12 @@ class GraphRAGAgent:
         return []
 
     def list_sessions(self) -> list[str]:
+        if self._db_conn:
+            try:
+                configs = self.checkpointer.list({})
+                return [c["configurable"]["thread_id"] for c in configs if c.get("configurable", {}).get("thread_id")]
+            except Exception:
+                pass
         return list(self._sessions)
 
     def new_session(self) -> str:
@@ -297,10 +390,14 @@ class GraphRAGAgent:
         return session_id
 
     def delete_session(self, session_id: str) -> bool:
-        if session_id in self._sessions:
-            self._sessions.discard(session_id)
-            return True
-        return False
+        if self._db_conn:
+            try:
+                self.checkpointer.delete_thread(session_id)
+                return True
+            except Exception:
+                pass
+        self._sessions.discard(session_id)
+        return session_id in self._sessions
 
     # -------------------- 其他接口 --------------------
 
@@ -318,4 +415,6 @@ class GraphRAGAgent:
     def close(self):
         if self.driver:
             self.driver.close()
-            logger.info("已关闭 Neo4j 连接 (ReAct Agent)")
+        if self._db_conn:
+            asyncio.run(self._db_conn.close())
+            logger.info("已关闭 Neo4j 及 SQLite 连接")

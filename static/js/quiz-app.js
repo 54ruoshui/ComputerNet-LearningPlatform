@@ -240,10 +240,13 @@
         const q = questions[currentIdx];
 
         try {
-            const result = await apiPost("/api/quiz/answer", {
+            const sessionId = localStorage.getItem('graphrag_session_id');
+            const body = {
                 question_id: q.id,
                 selected_answer: selectedAnswer,
-            });
+            };
+            if (sessionId) { body.session_id = sessionId; }
+            const result = await apiPost("/api/quiz/answer", body);
 
             // 标记选项
             document.querySelectorAll(".option-btn").forEach((btn) => {

@@ -61,7 +61,12 @@ class QuizService:
             result = session.run(
                 """
                 MATCH (q:MCQuestion {id: $id})
-                RETURN q.correct_answer AS correct_answer, q.explanation AS explanation
+                OPTIONAL MATCH (q)-[:ABOUT]->(e)
+                RETURN q.correct_answer AS correct_answer,
+                       q.explanation AS explanation,
+                       q.layer AS layer,
+                       q.difficulty AS difficulty,
+                       collect(e.name) AS references
                 """,
                 id=question_id,
             )
@@ -71,6 +76,9 @@ class QuizService:
             return {
                 "correct_answer": record["correct_answer"],
                 "explanation": record["explanation"],
+                "layer": record["layer"],
+                "difficulty": record["difficulty"],
+                "references": [r for r in (record["references"] or []) if r],
             }
 
     def get_stats(self) -> Dict:

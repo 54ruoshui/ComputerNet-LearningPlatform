@@ -52,12 +52,13 @@ def get_entities_without_embedding(driver):
         result = session.run("""
             MATCH (e:Entity)
             WHERE e.embedding IS NULL
-            RETURN e.name as name, e.description as description, e.entity_type as entity_type
+            RETURN e.name as name, e.name_en as name_en, e.description as description, e.entity_type as entity_type
         """)
         entities = []
         for record in result:
             entities.append({
                 "name": record["name"] or "",
+                "name_en": record["name_en"] or "",
                 "description": record["description"] or "",
                 "entity_type": record["entity_type"] or "",
             })
@@ -125,7 +126,7 @@ def main():
         all_data = []
         for i in range(0, len(entities), batch_size):
             batch = entities[i:i + batch_size]
-            texts = [f"{e['name']} {e['description']}" for e in batch]
+            texts = [f"{e['name']} {e.get('name_en', '')} {e['description']}" for e in batch]
             embeddings = embedding_mgr.embed_texts(texts)
 
             for entity, embedding in zip(batch, embeddings):

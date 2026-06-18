@@ -3,13 +3,14 @@ GraphRAG Web 界面
 基于 FastAPI 的 Web 应用，使用 LangGraph + LangChain 提供带会话记忆的知识图谱问答。
 """
 
+import asyncio
 import os
 from datetime import datetime
 from typing import Dict, List, Optional
 
 import structlog
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -36,7 +37,10 @@ app = FastAPI(title="GraphRAG 知识图谱问答系统", version="2.0")
 # ==================== 中间件 ====================
 
 from web.middleware import APIKeyMiddleware
+from web.rate_limiter import RateLimitMiddleware
+
 app.add_middleware(APIKeyMiddleware)
+app.add_middleware(RateLimitMiddleware)
 
 
 @app.middleware("http")
@@ -91,13 +95,8 @@ class MasteryBatchRequest(BaseModel):
 class QuizAnswerRequest(BaseModel):
     question_id: str = Field(..., min_length=1, max_length=100)
     selected_answer: str = Field(..., pattern="^[ABCD]$")
+    session_id: Optional[str] = None
 
-
-class HistoryItem(BaseModel):
-    question: str
-    answer: str
-    processingTime: float = 0
-    timestamp: str
 
 
 class MCQuestionCreate(BaseModel):
@@ -183,7 +182,7 @@ def init_mastery_tracker():
         logger.info("初始化掌握追踪器...")
         from src.mastery_tracker import MasteryTracker
         from src.services.mastery_service import MasteryService
-        db_path = os.path.join(project_root, "mastery.db")
+        db_path = os.path.join(project_root, "data", "memory", "mastery.db")
         tracker = MasteryTracker(db_path)
         mastery_service = MasteryService(tracker)
         logger.info("掌握追踪器初始化完成")
@@ -277,7 +276,8 @@ async def query(req: QueryRequest):
         if req.session_id and mastery_service:
             mastery_context = mastery_service.build_mastery_context(req.session_id)
 
-        response = engine.query(
+        response = await asyncio.to_thread(
+            engine.query,
             req.question,
             session_id=req.session_id,
             mastery_context=mastery_context,
@@ -310,6 +310,32 @@ async def query(req: QueryRequest):
     except Exception as e:
         logger.error("查询处理失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/query/stream")
+async def query_stream(req: QueryRequest):
+    """流式查询：SSE 逐 token 推送 + 工具状态 + 图谱数据"""
+    engine = _require_engine()
+    if req.session_id:
+        session_id_var.set(req.session_id)
+
+    mastery_context = ""
+    if req.session_id and mastery_service:
+        mastery_context = mastery_service.build_mastery_context(req.session_id)
+
+    return StreamingResponse(
+        engine.query_stream(
+            req.question,
+            session_id=req.session_id,
+            mastery_context=mastery_context,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ==================== 会话记忆 API ====================
@@ -521,8 +547,17 @@ async def submit_quiz_answer(req: QuizAnswerRequest):
         result = quiz_service.check_answer(req.question_id)
         if not result:
             raise HTTPException(status_code=404, detail="题目不存在")
+
+        is_correct = req.selected_answer == result["correct_answer"]
+
+        # 联动掌握度追踪：根据答题结果更新相关实体的掌握状态
+        if req.session_id and mastery_service and mastery_service.available:
+            refs = result.get("references", [])
+            for entity_name in refs:
+                mastery_service.set_mastery(req.session_id, entity_name, is_correct)
+
         return {
-            "correct": req.selected_answer == result["correct_answer"],
+            "correct": is_correct,
             "correct_answer": result["correct_answer"],
             "explanation": result["explanation"],
         }
@@ -609,24 +644,6 @@ async def api_remove_wrong(question_id: str):
 @app.delete("/api/quiz/wrong")
 async def api_clear_wrong():
     quiz_storage.clear_wrong()
-    return {"success": True}
-
-
-# ==================== 查询历史 本地存储 API ====================
-
-@app.get("/api/history")
-async def api_get_history():
-    return {"list": quiz_storage.get_history()}
-
-
-@app.post("/api/history")
-async def api_add_history(item: HistoryItem):
-    return {"list": quiz_storage.add_history(item.model_dump())}
-
-
-@app.delete("/api/history")
-async def api_clear_history():
-    quiz_storage.clear_history()
     return {"success": True}
 
 

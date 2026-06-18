@@ -1,11 +1,7 @@
 """
 LLM 关键词提取器
-从用户问题中提取核心关键词，用于改进语义检索。
-不使用 with_structured_output（与 glm-4-flash 不兼容），改用 prompt + 解析。
+使用 Qwen + with_structured_output，从用户问题中提取核心关键词。
 """
-
-import json
-import re
 
 import structlog
 from langchain_openai import ChatOpenAI
@@ -17,70 +13,38 @@ logger = structlog.get_logger(__name__)
 
 
 class KeywordsOutput(BaseModel):
-    """关键词提取的结构化输出"""
-    keywords: list[str] = Field(description="从问题中提取的3-5个计算机网络核心关键词")
+    keywords: list[str] = Field(description="计算机网络核心关键词名词")
 
 
 class KeywordExtractor:
-    """基于 LLM 的关键词提取器"""
 
-    _SYSTEM_PROMPT = """你是一个计算机网络领域的关键词提取专家。
-从用户的问题中提取3-5个最核心的计算机网络关键词。
-只返回一个 JSON 数组，不要返回其他任何内容。
-示例格式：["TCP", "三次握手", "传输层"]"""
+    _SYSTEM_PROMPT = "从用户问题中提取最核心的计算机网络关键词名词。"
 
-    def __init__(self):
-        settings = get_settings()
-        self._llm = ChatOpenAI(
-            base_url=settings.zhipuai_base_url,
-            api_key=settings.zhipuai_api_key,
-            model=settings.zhipuai_model,
-            temperature=0,
-            max_tokens=100,
-        )
+    def __init__(self, llm=None):
+        if llm is not None:
+            self._llm = llm
+        else:
+            settings = get_settings()
+            api_key = settings.qwen_api_key or settings.dashscope_api_key
+            self._llm = ChatOpenAI(
+                base_url=settings.dashscope_base_url,
+                api_key=api_key,
+                model=settings.qwen_chat_model,
+                temperature=0,
+                max_tokens=100,
+            )
+        self._extractor = self._llm.with_structured_output(KeywordsOutput)
 
     def extract(self, question: str) -> str:
-        """从问题中提取关键词，返回空格分隔的字符串。失败时返回原始问题。"""
         try:
-            response = self._llm.invoke([
+            result = self._extractor.invoke([
                 {"role": "system", "content": self._SYSTEM_PROMPT},
                 {"role": "user", "content": question},
             ])
-            keywords = self._parse_keywords(response.content)
-            if keywords:
-                result = " ".join(keywords)
-                logger.info("LLM 提取关键词", question=question, keywords=result)
-                return result
+            if result.keywords:
+                kw_str = " ".join(result.keywords)
+                logger.info("Qwen 提取关键词", question=question, keywords=kw_str)
+                return kw_str
         except Exception as e:
-            logger.warning("LLM 关键词提取失败，使用原始问题", error=str(e))
+            logger.warning("Qwen 关键词提取失败，fallback 原始问题", error=str(e))
         return question
-
-    def _parse_keywords(self, text: str) -> list[str]:
-        """从 LLM 回复中解析关键词列表"""
-        text = text.strip()
-
-        # 尝试直接 JSON 解析
-        try:
-            result = json.loads(text)
-            if isinstance(result, list):
-                return [str(k).strip() for k in result if str(k).strip()]
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-        # 尝试提取 JSON 数组
-        match = re.search(r'\[.*?\]', text, re.DOTALL)
-        if match:
-            try:
-                result = json.loads(match.group())
-                if isinstance(result, list):
-                    return [str(k).strip() for k in result if str(k).strip()]
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-        # 尝试逗号/顿号/换行分割
-        parts = re.split(r'[,，、\n]+', text)
-        cleaned = [p.strip().strip('"\'""''') for p in parts if p.strip()]
-        if cleaned:
-            return cleaned
-
-        return []

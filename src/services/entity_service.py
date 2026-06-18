@@ -26,7 +26,7 @@ class EntityService:
                 result = session.run("""
                     MATCH (l:Layer)-[:CONTAINS]->(e:Entity)
                     RETURN l.name AS layer, l.layer_number AS layer_num,
-                           e.name AS name, e.entity_type AS entity_type, e.description AS description
+                           e.name AS name, e.name_en AS name_en, e.entity_type AS entity_type, e.description AS description
                     ORDER BY l.layer_number, e.entity_type, e.name
                 """)
                 for record in result:
@@ -35,6 +35,7 @@ class EntityService:
                         entities_by_layer[layer] = []
                     entities_by_layer[layer].append({
                         "name": record["name"],
+                        "name_en": record["name_en"] or "",
                         "entity_type": record["entity_type"],
                         "description": record["description"] or "",
                     })

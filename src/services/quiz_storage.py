@@ -1,23 +1,18 @@
 """
-JSON file-based storage for quiz progress and query history.
+JSON file-based storage for quiz progress.
 Thread-safe via file locking.
 """
 
 import json
-import os
 import threading
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 _BASE_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "quiz"
 _WRONG_FILE = _BASE_DIR / "wrong_answers.json"
 _DONE_FILE = _BASE_DIR / "done_ids.json"
-_HISTORY_FILE = _BASE_DIR / "history.json"
 
 _lock = threading.Lock()
-_history_lock = threading.Lock()
-
-MAX_HISTORY = 50
 
 
 def _read_json(path: Path):
@@ -76,24 +71,3 @@ def remove_wrong(question_id: str) -> List[dict]:
 def clear_wrong() -> None:
     with _lock:
         _write_json(_WRONG_FILE, [])
-
-
-# ---- Query History ----
-
-def get_history() -> List[dict]:
-    with _history_lock:
-        return _read_json(_HISTORY_FILE)
-
-
-def add_history(item: dict) -> List[dict]:
-    with _history_lock:
-        lst = _read_json(_HISTORY_FILE)
-        lst.insert(0, item)
-        lst = lst[:MAX_HISTORY]
-        _write_json(_HISTORY_FILE, lst)
-    return lst
-
-
-def clear_history() -> None:
-    with _history_lock:
-        _write_json(_HISTORY_FILE, [])

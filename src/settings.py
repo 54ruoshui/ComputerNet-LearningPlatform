@@ -26,7 +26,9 @@ class Settings(BaseSettings):
     # Qwen / DashScope Embeddings
     qwen_api_key: str = ""
     qwen_embedding_model: str = "text-embedding-v3"
+    qwen_chat_model: str = "qwen-turbo"
     dashscope_api_key: str = ""
+    dashscope_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
     # Retrieval
     max_entities: int = Field(default=20, ge=1, le=100)
@@ -39,8 +41,8 @@ class Settings(BaseSettings):
 
     # Memory / conversation
     max_messages_before_summary: int = 20
-    memory_backend: str = "memory"
-    sqlite_db_path: str = "graphrag_checkpoints.db"
+    memory_backend: str = "sqlite"
+    sqlite_db_path: str = "data/memory/graphrag_checkpoints.db"
 
     # Web
     web_host: str = "0.0.0.0"

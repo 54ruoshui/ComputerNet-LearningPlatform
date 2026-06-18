@@ -129,10 +129,12 @@ class LayerGraphBuilder:
                         MERGE (e:Entity {name: $name})
                         SET e.entity_type = $entity_type,
                             e.description = $description,
-                            e.layer = $layer
+                            e.layer = $layer,
+                            e.name_en = $name_en
                     """, name=name, entity_type=label,
                          description=entity.get("description", ""),
-                         layer=layer_name)
+                         layer=layer_name,
+                         name_en=entity.get("name_en", ""))
 
                     # 添加子类型标签（Protocol/Device/Concept）
                     session.run(f"""

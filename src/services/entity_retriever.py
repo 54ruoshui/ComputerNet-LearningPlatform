@@ -63,17 +63,29 @@ class EntityRetriever:
     # ==================== 实体检索 ====================
 
     def retrieve_entities(self, question: str) -> list[dict]:
-        """向量语义检索"""
-        entities = self.semantic_search(question, top_k=self.max_entities)
-        entities.sort(key=lambda e: e["score"], reverse=True)
-        return entities[:self.max_entities]
+        """混合检索：语义 + 关键词匹配"""
+        kw = self._keyword_extractor.extract(question)
+        semantic_results = self.semantic_search(question, kw, top_k=self.max_entities)
+        keyword_results = self._keyword_match(kw, top_k=self.max_entities // 2)
 
-    def semantic_search(self, question: str, top_k: int = 10) -> list[dict]:
-        """向量语义检索：先提取关键词再向量化"""
+        merged: dict[str, dict] = {}
+        for e in semantic_results:
+            merged[e["name"]] = e
+        for e in keyword_results:
+            if e["name"] in merged:
+                merged[e["name"]]["score"] = max(merged[e["name"]]["score"], e["score"])
+            else:
+                merged[e["name"]] = e
+
+        results = sorted(merged.values(), key=lambda e: e["score"], reverse=True)
+        return results[:self.max_entities]
+
+    def semantic_search(self, question: str, keywords: str = "", top_k: int = 10) -> list[dict]:
+        """向量语义检索：将关键词或问题文本向量化后检索"""
         if not self._embedding_mgr.ready:
             return []
 
-        query_text = self._keyword_extractor.extract(question)
+        query_text = keywords or self._keyword_extractor.extract(question)
         query_embedding = self._embedding_mgr.embed_query(query_text)
         if not query_embedding:
             return []
@@ -88,6 +100,7 @@ class EntityRetriever:
                         CALL db.index.vector.search('entity_embedding_index', $top_k, $embedding)
                         YIELD node, score
                         RETURN node.name as name,
+                               node.name_en as name_en,
                                node.entity_type as entity_type,
                                node.description as description,
                                node.layer as layer,
@@ -98,6 +111,7 @@ class EntityRetriever:
                         CALL db.index.vector.queryNodes('entity_embedding_index', $top_k, $embedding)
                         YIELD node, score
                         RETURN node.name as name,
+                               node.name_en as name_en,
                                node.entity_type as entity_type,
                                node.description as description,
                                node.layer as layer,
@@ -107,6 +121,7 @@ class EntityRetriever:
                     if record["name"]:
                         entities.append({
                             "name": record["name"],
+                            "name_en": record["name_en"] or "",
                             "entity_type": record["entity_type"] or "Unknown",
                             "description": record["description"] or "",
                             "layer": record["layer"] or "",
@@ -116,6 +131,44 @@ class EntityRetriever:
             logger.warning("语义检索失败", error=str(e))
 
         return entities
+
+    def _keyword_match(self, keywords: str, top_k: int = 10) -> list[dict]:
+        """基于关键词的精确匹配检索（Cypher CONTAINS）"""
+        kw_list = [kw.strip() for kw in keywords.split() if kw.strip()]
+        if not kw_list:
+            return []
+
+        entities: dict[str, dict] = {}
+        try:
+            with self._driver.session() as session:
+                for kw in kw_list[:5]:
+                    result = session.run("""
+                        MATCH (e:Entity)
+                        WHERE e.name CONTAINS $kw OR e.description CONTAINS $kw
+                        RETURN e.name as name,
+                               e.name_en as name_en,
+                               e.entity_type as entity_type,
+                               e.description as description,
+                               e.layer as layer
+                        LIMIT $limit
+                    """, kw=kw, limit=5)
+                    for record in result:
+                        name = record["name"]
+                        if name in entities:
+                            entities[name]["score"] += 2
+                        else:
+                            entities[name] = {
+                                "name": name,
+                                "name_en": record["name_en"] or "",
+                                "entity_type": record["entity_type"] or "Unknown",
+                                "description": record["description"] or "",
+                                "layer": record["layer"] or "",
+                                "score": 2.0,
+                            }
+        except Exception as e:
+            logger.warning("关键词匹配检索失败", error=str(e))
+
+        return sorted(entities.values(), key=lambda e: e["score"], reverse=True)[:top_k]
 
     # ==================== 辅助查询 ====================
 
@@ -232,23 +285,29 @@ class EntityRetriever:
     # ==================== Web API 辅助 ====================
 
     def keyword_search(self, query: str, limit: int = 10) -> list[dict]:
-        """节点搜索：提取关键词后通过向量语义检索匹配节点"""
+        """节点搜索：关键词精确匹配 + 语义检索取并集"""
         if not query.strip():
             return []
-        return self.semantic_search(query, top_k=limit)
+        kw = self._keyword_extractor.extract(query)
+        keyword_results = self._keyword_match(kw, top_k=limit)
+        if len(keyword_results) >= limit:
+            return keyword_results[:limit]
+        semantic_results = self.semantic_search(query, kw, top_k=limit)
+        seen = {e["name"] for e in keyword_results}
+        for e in semantic_results:
+            if e["name"] not in seen:
+                keyword_results.append(e)
+                seen.add(e["name"])
+        return keyword_results[:limit]
 
     def get_neighbors(self, node_name: str, depth: int = 2) -> list[dict]:
+        if not isinstance(depth, int) or depth < 1 or depth > 5:
+            depth = 2
         if depth == 1:
             cypher = """
             MATCH (start {name: $node_name})-[r]-(neighbor)
             RETURN DISTINCT neighbor, labels(neighbor) as types, 1 as distance
             ORDER BY labels(neighbor)[0] LIMIT 50
-            """
-        elif depth == 2:
-            cypher = """
-            MATCH path = (start {name: $node_name})-[*1..2]-(neighbor)
-            RETURN DISTINCT neighbor, labels(neighbor) as types, length(path) as distance
-            ORDER BY distance, labels(neighbor)[0] LIMIT 50
             """
         else:
             cypher = f"""

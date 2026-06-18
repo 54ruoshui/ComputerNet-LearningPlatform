@@ -7,7 +7,13 @@
 let isRecording = false;
 let recognition = null;
 let queryHistory = [];
-let currentSessionId = null;
+let currentSessionId = localStorage.getItem('graphrag_session_id') || null;
+
+function setCurrentSessionId(id) {
+    currentSessionId = id;
+    if (id) { localStorage.setItem('graphrag_session_id', id); }
+    else { localStorage.removeItem('graphrag_session_id'); }
+}
 let currentGraphData = null;
 let currentQuestion = null;
 let currentImageUrl = null;
@@ -79,24 +85,40 @@ function toggleVoiceRecognition() {
     }
 }
 
-// ==================== Query History ====================
+// ==================== Query History (session-based) ====================
 
 async function loadQueryHistory() {
+    if (!currentSessionId) {
+        queryHistory = [];
+        updateHistoryDisplay();
+        return;
+    }
     try {
-        const res = await fetch('/api/history');
-        if (res.ok) {
-            const data = await res.json();
-            queryHistory = data.list || [];
-            updateHistoryDisplay();
-            return;
+        const sessionHistory = await loadSessionHistory();
+        // Pair user messages with following assistant messages
+        const paired = [];
+        for (let i = 0; i < sessionHistory.length; i++) {
+            if (sessionHistory[i].role === 'user') {
+                const answer = (i + 1 < sessionHistory.length && sessionHistory[i + 1].role === 'assistant')
+                    ? sessionHistory[i + 1].content : '';
+                paired.push({
+                    question: sessionHistory[i].content,
+                    answer: answer,
+                    processingTime: 0,
+                    timestamp: new Date().toISOString()
+                });
+            }
         }
-    } catch (e) { /* fallback to empty */ }
-    queryHistory = [];
-    updateHistoryDisplay();
+        queryHistory = paired.reverse();
+        updateHistoryDisplay();
+    } catch (e) {
+        queryHistory = [];
+        updateHistoryDisplay();
+    }
 }
 
 async function saveQueryHistory() {
-    // no-op: history is saved per-item via addToHistory
+    // no-op: session history is auto-saved by backend checkpointer
 }
 
 async function addToHistory(question, answer, processingTime) {
@@ -111,13 +133,6 @@ async function addToHistory(question, answer, processingTime) {
         queryHistory = queryHistory.slice(0, 50);
     }
     updateHistoryDisplay();
-    try {
-        await fetch('/api/history', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(historyItem)
-        });
-    } catch (e) { /* silently fail */ }
 }
 
 function updateHistoryDisplay() {
@@ -166,13 +181,18 @@ function updateHistoryDisplay() {
 }
 
 async function clearHistory() {
-    if (confirm('确定要清空所有查询历史吗？')) {
+    if (confirm('确定要清空当前会话的所有记录吗？')) {
         queryHistory = [];
         updateHistoryDisplay();
-        try {
-            await fetch('/api/history', { method: 'DELETE' });
-        } catch (e) { /* silently fail */ }
-        showMessage('历史记录已清空', 'success');
+        if (currentSessionId) {
+            try {
+                await fetch('/api/sessions/' + currentSessionId, { method: 'DELETE' });
+                currentSessionId = null;
+                localStorage.removeItem('graphrag_session_id');
+                updateSessionIndicator();
+            } catch (e) { /* silently fail */ }
+        }
+        showMessage('会话记录已清空', 'success');
     }
 }
 
@@ -634,88 +654,120 @@ async function submitQuery() {
             requestBody.session_id = currentSessionId;
         }
 
-        var response = await fetch('/api/query', {
+        // Use streaming SSE endpoint
+        var response = await fetch('/api/query/stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)
         });
 
-        var data = await response.json();
-
-        if (response.ok) {
-            if (data.session_id) {
-                currentSessionId = data.session_id;
-                updateSessionIndicator();
-            }
-
-            // Add AI message
-            if (chatMessages) {
-                var aiMsg = document.createElement('div');
-                aiMsg.className = 'chat-msg chat-msg-ai';
-
-                var badgesHtml = '<div class="msg-badges">';
-                if (data.session_id) {
-                    badgesHtml += '<span class="msg-badge msg-badge-session"><i class="fas fa-brain" style="font-size:10px"></i> 会话记忆</span>';
-                }
-                if (data.processing_time !== undefined) {
-                    badgesHtml += '<span class="msg-mode">' + data.processing_time.toFixed(1) + 's</span>';
-                }
-                badgesHtml += '</div>';
-
-                var formattedAnswer = formatAnswer(data.answer);
-
-                var graphBtnHtml = '';
-                if (data.graph_data) {
-                    graphBtnHtml = '<button class="msg-graph-btn" onclick="openGraphPanel()">' +
-                        '<i class="fas fa-diagram-project"></i>' +
-                        '<span>查看知识图谱</span>' +
-                        '<i class="fas fa-arrow-right"></i>' +
-                        '</button>';
-                }
-
-                // Entity tags from extracted knowledge points
-                var entityTagsHtml = '';
-                if (data.extracted_entities && data.extracted_entities.length > 0) {
-                    entityTagsHtml = '<div class="entity-tags">';
-                    entityTagsHtml += '<span class="entity-tags-label"><i class="fas fa-tags"></i> 相关知识点：</span>';
-                    data.extracted_entities.forEach(function(entityName) {
-                        var isMastered = masteryState[entityName];
-                        var cls = isMastered ? 'entity-tag mastered' : 'entity-tag unmastered';
-                        var icon = isMastered ? '<i class="fas fa-check-circle"></i>' : '<i class="far fa-circle"></i>';
-                        var safeName = entityName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                        entityTagsHtml += '<button class="' + cls + '" data-entity="' + escapeHtml(entityName) + '" onclick="toggleEntityMastery(\'' + safeName + '\')">' +
-                            icon + ' ' + escapeHtml(entityName) + '</button>';
-                    });
-                    entityTagsHtml += '</div>';
-                }
-
-                aiMsg.innerHTML = '<div class="msg-avatar"><i class="fas fa-sparkles"></i></div>' +
-                    '<div class="msg-bubble msg-bubble-ai">' +
-                    '<div class="msg-content">' + badgesHtml + formattedAnswer + '</div>' +
-                    entityTagsHtml +
-                    graphBtnHtml +
-                    '</div>';
-
-                chatMessages.appendChild(aiMsg);
-
-                // Store answerContent reference for copy
-                aiMsg.querySelector('.msg-content').id = 'answerContent';
-
-                if (data.graph_data) {
-                    displayGraphImage(data.graph_data, data.question);
-                }
-            }
-
-            addToHistory(data.question, data.answer, data.processing_time);
-
-            // Refresh mastery state after query
-            if (currentSessionId && data.extracted_entities && data.extracted_entities.length > 0) {
-                loadMasteryState();
-            }
-
-        } else {
-            throw new Error(data.error || '查询失败');
+        if (!response.ok) {
+            throw new Error('查询请求失败');
         }
+
+        // Create AI message container
+        var aiMsg = null;
+        var answerText = '';
+        var graphData = null;
+        var statusMsg = null;
+
+        if (chatMessages) {
+            aiMsg = document.createElement('div');
+            aiMsg.className = 'chat-msg chat-msg-ai';
+            aiMsg.innerHTML = '<div class="msg-avatar"><i class="fas fa-sparkles"></i></div>' +
+                '<div class="msg-bubble msg-bubble-ai">' +
+                '<div class="msg-content" id="answerContent"></div>' +
+                '</div>';
+            chatMessages.appendChild(aiMsg);
+        }
+
+        // Read SSE stream
+        var reader = response.body.getReader();
+        var decoder = new TextDecoder();
+        var buffer = '';
+
+        while (true) {
+            var { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            var lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            var eventType = '';
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i];
+                if (line.startsWith('event: ')) {
+                    eventType = line.slice(7).trim();
+                } else if (line.startsWith('data: ') && eventType) {
+                    try {
+                        var payload = JSON.parse(line.slice(6));
+                        handleSSEEvent(eventType, payload);
+                    } catch (e) {
+                        // Skip unparseable lines
+                    }
+                    eventType = '';
+                }
+            }
+        }
+
+        function handleSSEEvent(type, payload) {
+            var contentEl = aiMsg ? aiMsg.querySelector('.msg-content') : null;
+
+            if (type === 'status') {
+                if (!statusMsg && contentEl) {
+                    statusMsg = document.createElement('div');
+                    statusMsg.className = 'stream-status';
+                    statusMsg.style.cssText = 'color:#888;font-size:13px;margin-bottom:8px;animation:pulse 1.5s infinite;';
+                    contentEl.appendChild(statusMsg);
+                }
+                if (statusMsg) statusMsg.textContent = payload.msg;
+            } else if (type === 'token') {
+                if (statusMsg) { statusMsg.remove(); statusMsg = null; }
+                answerText += payload.content;
+                if (contentEl) {
+                    contentEl.innerHTML = formatAnswer(answerText);
+                }
+                var chatScroll = document.getElementById('chatScroll');
+                if (chatScroll) chatScroll.scrollTop = chatScroll.scrollHeight;
+            } else if (type === 'graph') {
+                graphData = payload;
+                displayGraphImage(payload, question);
+            } else if (type === 'done') {
+                if (payload.session_id) {
+                    setCurrentSessionId(payload.session_id);
+                    updateSessionIndicator();
+                }
+                // Add badges and graph button
+                if (aiMsg) {
+                    var bubble = aiMsg.querySelector('.msg-bubble-ai');
+                    var badgesHtml = '<div class="msg-badges">';
+                    if (currentSessionId) {
+                        badgesHtml += '<span class="msg-badge msg-badge-session"><i class="fas fa-brain" style="font-size:10px"></i> 会话记忆</span>';
+                    }
+                    if (payload.elapsed) {
+                        badgesHtml += '<span class="msg-mode">' + payload.elapsed + 's</span>';
+                    }
+                    badgesHtml += '</div>';
+                    if (bubble) {
+                        bubble.insertAdjacentHTML('afterbegin', badgesHtml);
+                    }
+                    if (graphData) {
+                        var graphBtn = document.createElement('button');
+                        graphBtn.className = 'msg-graph-btn';
+                        graphBtn.innerHTML = '<i class="fas fa-diagram-project"></i><span>查看知识图谱</span><i class="fas fa-arrow-right"></i>';
+                        graphBtn.onclick = function() { openGraphPanel(); };
+                        bubble.appendChild(graphBtn);
+                    }
+                }
+                addToHistory(question, answerText, payload.elapsed || 0);
+            } else if (type === 'error') {
+                if (contentEl) {
+                    contentEl.innerHTML = '<div class="error-msg">查询失败: ' + escapeHtml(payload.msg) + '</div>';
+                }
+            }
+        }
+
     } catch (error) {
         console.error('查询失败:', error);
         if (chatMessages) {
@@ -738,12 +790,12 @@ async function startNewSession() {
         var response = await fetch('/api/sessions/new', { method: 'POST' });
         if (response.ok) {
             var data = await response.json();
-            currentSessionId = data.session_id;
+            setCurrentSessionId(data.session_id);
         } else {
-            currentSessionId = null;
+            setCurrentSessionId(null);
         }
     } catch (error) {
-        currentSessionId = null;
+        setCurrentSessionId(null);
     }
     updateSessionIndicator();
 
@@ -787,7 +839,7 @@ async function loadSessions() {
         var data = await response.json();
         var sessions = data.sessions || [];
         if (sessions.length > 0 && !currentSessionId) {
-            currentSessionId = sessions[0].session_id;
+            setCurrentSessionId(sessions[0].session_id);
             updateSessionIndicator();
         }
     } catch (error) {
@@ -802,7 +854,7 @@ async function deleteCurrentSession() {
     } catch (error) {
         // silent
     }
-    currentSessionId = null;
+    setCurrentSessionId(null);
     updateSessionIndicator();
 }
 

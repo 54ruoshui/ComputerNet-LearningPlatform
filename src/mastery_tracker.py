@@ -13,7 +13,7 @@ logger = structlog.get_logger(__name__)
 
 
 class MasteryTracker:
-    def __init__(self, db_path: str = "mastery.db"):
+    def __init__(self, db_path: str = "data/memory/mastery.db"):
         self.db_path = db_path
         self._lock = threading.Lock()
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
