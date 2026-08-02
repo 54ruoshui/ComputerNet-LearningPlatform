@@ -1,0 +1,1251 @@
+[
+  {
+    "text": "计算机网络按覆盖范围从小到大排列，正确的顺序是？",
+    "option_a": "WAN < MAN < LAN < PAN",
+    "option_b": "PAN < LAN < MAN < WAN",
+    "option_c": "LAN < PAN < MAN < WAN",
+    "option_d": "MAN < WAN < LAN < PAN",
+    "correct_answer": "B",
+    "explanation": "按覆盖范围从小到大：个人区域网(PAN, <10m) < 局域网(LAN, 几米~几公里) < 城域网(MAN, 几公里~几十公里) < 广域网(WAN, 几十公里~几千公里)。对于WAN，通常由电信公司提供远距离通信服务，跨越国家甚至洲际。此外还有互联网(Internet)是全球范围的网络互联。",
+    "difficulty": "basic",
+    "layer": "物理层",
+    "chapter": "1.5",
+    "section": "计算机网络的类别",
+    "references": [
+      "WAN",
+      "LAN",
+      "MAN",
+      "PAN"
+    ]
+  },
+  {
+    "text": "按照网络拓扑结构分类，以下哪种拓扑结构中，任意两个节点之间都有直接链路相连？",
+    "option_a": "星型拓扑",
+    "option_b": "总线型拓扑",
+    "option_c": "全连接（网状）拓扑",
+    "option_d": "环形拓扑",
+    "correct_answer": "C",
+    "explanation": "全连接(网状/Mesh)拓扑中，每对节点间都有专用点对点链路。对于n个节点，需要n(n-1)/2条物理链路。其优点是可靠性极高（单链路故障不影响其他节点通信）、通信延迟低；缺点是布线成本极高，扩展困难。实际中完全网状拓扑仅用于核心路由器互连等关键场景，更常见的是部分网状拓扑。",
+    "difficulty": "basic",
+    "layer": "物理层",
+    "chapter": "1.5",
+    "section": "计算机网络的类别",
+    "references": [
+      "LAN",
+      "MAN",
+      "WAN"
+    ]
+  },
+  {
+    "text": "关于计算机网络的分类，以下说法错误的是？",
+    "option_a": "按覆盖范围可分为广域网、城域网、局域网、个人区域网",
+    "option_b": "按使用者可分为公用网和专用网",
+    "option_c": "按拓扑结构可分为星型、总线型、环形、网状等",
+    "option_d": "广域网的传输速率一定比局域网高",
+    "correct_answer": "D",
+    "explanation": "广域网的传输速率不一定高于局域网。实际上，由于广域网需要使用电信公司提供的长途通信线路，其单位成本较高但速率通常低于局域网。现代局域网可以达到100Gbps甚至更高（如100GbE以太网），而广域网的接入速率通常为几十Mbps到几Gbps。当然，主干广域网（如光传送网OTN）速率也可以很高，但终端用户的接入速率受到最后一公里瓶颈限制。",
+    "difficulty": "medium",
+    "layer": "物理层",
+    "chapter": "1.5",
+    "section": "计算机网络的类别",
+    "references": [
+      "LAN",
+      "MAN",
+      "WAN",
+      "PAN"
+    ]
+  },
+  {
+    "text": "网络按使用范围可分为公用网和专用网，以下哪个是专用网的例子？",
+    "option_a": "中国电信提供的CHINANET",
+    "option_b": "中国工商银行内部的企业内部网(Intranet)",
+    "option_c": "星巴克店内的免费Wi-Fi",
+    "option_d": "校园内的CERNET",
+    "correct_answer": "B",
+    "explanation": "公用网(Public Network)面向所有付费用户提供服务，如电信公司提供的CHINANET。专用网(Private Network)是某个部门或机构为本单位的特殊业务需要而建设的网络，不对外提供服务，如军队通信网、铁路调度网、银行内部网。企业内联网(Intranet)是使用TCP/IP技术但仅在内部访问的专用网络。CERNET虽然主要为教育科研服务，但其主干网属于国家公用基础设施。",
+    "difficulty": "basic",
+    "layer": "物理层",
+    "chapter": "1.5",
+    "section": "计算机网络的类别",
+    "references": []
+  },
+  {
+    "text": "光纤的单模和多模传输方式的区别主要在于什么？",
+    "option_a": "单模光纤的纤芯更粗",
+    "option_b": "多模光纤使用激光光源，单模光纤使用LED光源",
+    "option_c": "单模光纤只传输一条光线（基模），多模光纤可传输多条光线（多模）",
+    "option_d": "多模光纤传输距离更远",
+    "correct_answer": "C",
+    "explanation": "单模光纤芯径8-10μm，只允许一种传播模式（光线沿轴向直线传播），色散极小，适合长距离（数十到上百公里）高速传输。多模光纤芯径50μm或62.5μm，允许多个光传播模式同时传输，但不同模式传播路径不同导致到达时间有差异（模式色散），限制了传输距离和速率（几百米到几千米）。单模光纤通常使用半导体激光器(ILD)，而多模光纤通常使用LED。",
+    "difficulty": "medium",
+    "layer": "物理层",
+    "chapter": "2.3",
+    "section": "物理层下面的传输媒体",
+    "references": [
+      "光纤",
+      "单模光纤",
+      "多模光纤"
+    ]
+  },
+  {
+    "text": "卫星通信中，地球同步卫星(GEO)的轨道高度大约是多少？",
+    "option_a": "500-1500公里（低轨道LEO）",
+    "option_b": "8000-20000公里（中轨道MEO）",
+    "option_c": "约35,800公里（地球同步轨道）",
+    "option_d": "约100,000公里",
+    "correct_answer": "C",
+    "explanation": "地球同步卫星(GEO, Geostationary Earth Orbit)位于赤道平面上约35,786公里的轨道上，绕地球一周时间恰好等于地球自转周期(23小时56分4秒)，因此从地面上看卫星是静止不动的。优点：三颗GEO卫星即可覆盖除两极外的全球。缺点：传播时延大（单跳约250-280ms，是光纤的十几倍），不适合实时交互通信。LEO(500-1500km)和MEO(8000-20000km)轨道更低，时延更小但覆盖范围也更小，需要更多卫星组成星座（如Starlink）。",
+    "difficulty": "medium",
+    "layer": "物理层",
+    "chapter": "2.3",
+    "section": "物理层下面的传输媒体",
+    "references": [
+      "卫星通信",
+      "同步卫星",
+      "微波通信",
+      "低轨道卫星"
+    ]
+  },
+  {
+    "text": "多径效应(Multipath)对无线通信的主要影响是什么？",
+    "option_a": "提高信号强度",
+    "option_b": "不同路径到达的信号产生干涉，导致码间串扰和信号衰落",
+    "option_c": "增加传输速率",
+    "option_d": "降低信号的频率",
+    "correct_answer": "B",
+    "explanation": "多径效应是无线通信中的常见问题：发射信号经多条不同路径（直射、反射、绕射）到达接收天线，各路径传播距离不同导致到达时间不同，造成：(1)符号间干扰(ISI)——前一个符号的延迟信号干扰后一个符号；(2)频率选择性衰落——不同频率分量受到的衰减不同。正交频分复用(OFDM)是应对多径效应的关键技术：将高速数据流分配到多个低速正交子载波上，每个子载波的符号周期远大于多径时延扩展，从而有效对抗ISI。",
+    "difficulty": "hard",
+    "layer": "物理层",
+    "chapter": "2.3",
+    "section": "物理层下面的传输媒体",
+    "references": [
+      "多径效应",
+      "衰落",
+      "正交频分复用",
+      "无线传输"
+    ]
+  },
+  {
+    "text": "以下哪种信道复用技术可以为每个用户分配一个独有的伪随机码片序列？",
+    "option_a": "频分复用FDM",
+    "option_b": "时分复用TDM",
+    "option_c": "码分复用CDM",
+    "option_d": "空分复用SDM",
+    "correct_answer": "C",
+    "explanation": "码分复用(Code Division Multiplexing, CDM)为每个用户分配独一无二的码片序列(Chip Sequence)。所有用户在同一时间使用同一频率通信，但通过各自的正交码片序列将信号编码，接收方使用对应码片序列进行解码（内积运算）提取信号。GSM系统使用TDMA+FDMA，3G的CDMA2000和WCDMA使用CDMA，4G LTE使用OFDMA。空分复用(SDM)利用空间分隔（如方向天线、MIMO中的空间流）来复用信道。",
+    "difficulty": "medium",
+    "layer": "物理层",
+    "chapter": "2.4",
+    "section": "信道复用技术",
+    "references": [
+      "码分复用",
+      "频分复用",
+      "时分复用",
+      "波分复用"
+    ]
+  },
+  {
+    "text": "T1载波（北美标准）和E1载波（欧洲/中国标准）的速率分别是多少？",
+    "option_a": "T1=2.048Mbps, E1=1.544Mbps",
+    "option_b": "T1=1.544Mbps, E1=2.048Mbps",
+    "option_c": "T1=155Mbps, E1=622Mbps",
+    "option_d": "两者都是64kbps",
+    "correct_answer": "B",
+    "explanation": "T1(北美/日本标准)=1.544Mbps，由24个64kbps话音信道(DS0)组成，加1个8kbps的帧同步位。E1(欧洲/中国标准)=2.048Mbps，由32个64kbps的时隙组成，其中时隙0用于帧同步，时隙16传输信令，其余30个时隙传输话音或数据。这就是PDH体系的1次群速率，可见不同标准的速率不兼容，这也是SDH应运而生的原因。",
+    "difficulty": "hard",
+    "layer": "物理层",
+    "chapter": "2.5",
+    "section": "数字传输系统",
+    "references": [
+      "PDH",
+      "SDH",
+      "T1/E1载波"
+    ]
+  },
+  {
+    "text": "SDH帧结构的比喻手法是什么？STM-1帧的结构特点是什么？",
+    "option_a": "类似一个容器，固定大小",
+    "option_b": "9行×270列的矩阵（块状帧），每帧125μs",
+    "option_c": "变长帧结构",
+    "option_d": "类似IP数据包",
+    "correct_answer": "B",
+    "explanation": "STM-1帧结构是9行×270列的块状帧=2430字节，每帧的发送周期固定为125μs，即每秒发送8000帧。由此计算STM-1速率：2430×8×8000=155.52Mbps。'块状帧'的比喻很形象——可以想象成一个9行270列的集装箱，每一格(字节)的位置都有特定含义。SDH采用这种同步时分复用结构，低速率信号（如2Mbps E1）通过指针可以精确地定位到STM-1帧的特定字节位置，支持直接上下路而不需要全部分解复用。",
+    "difficulty": "hard",
+    "layer": "物理层",
+    "chapter": "2.5",
+    "section": "数字传输系统",
+    "references": [
+      "SDH",
+      "PDH",
+      "SONET",
+      "时分复用"
+    ]
+  },
+  {
+    "text": "xDSL技术中，为什么ADSL的下行速率远大于上行速率（非对称性）？",
+    "option_a": "因为上传需要更多功率",
+    "option_b": "基于用户行为假设：家庭用户下载网页、视频的数据量远大于上传的数据量",
+    "option_c": "因为电话线物理特性决定",
+    "option_d": "因为ADSL调制解调器设计缺陷",
+    "correct_answer": "B",
+    "explanation": "ADSL(Asymmetric Digital Subscriber Line)的非对称设计基于统计观察：家庭和小型办公用户浏览网页、下载文件、观看流媒体视频时，从互联网下载的数据量远大于上传的数据量（典型比例为10:1甚至更高）。因此ADSL分配更多频谱资源给下行信道（如下行8Mbps，上行1Mbps）。对称DSL(SDSL/HDSL)则上下行速率相同，适合需要双向对称带宽的企业用户。VDSL是非对称的升级版（下行可达52Mbps），VDSL2最高可达100Mbps。",
+    "difficulty": "medium",
+    "layer": "物理层",
+    "chapter": "2.6",
+    "section": "宽带接入技术",
+    "references": [
+      "ADSL",
+      "DSL技术",
+      "VDSL",
+      "VDSL2"
+    ]
+  },
+  {
+    "text": "在CSMA/CD协议中，争用期的长度等于什么？",
+    "option_a": "数据帧的发送时间",
+    "option_b": "以太网端到端往返时间（2倍传播时延），即一个信号在最远两端之间来回的时间",
+    "option_c": "随机的等待时间",
+    "option_d": "帧间最小间隔",
+    "correct_answer": "B",
+    "explanation": "争用期(Contention Period)是CSMA/CD设计的关键参数，定义为以太网中两个最远站点之间的信号往返时间(2τ)。只有发送方在争用期(2τ)内检测不到冲突，才能确保数据帧不会在后续传输中发生冲突。以太网规定争用期=51.2μs，这决定了最短帧长=64字节（10Mbps时51.2μs可发送512比特=64字节）。如果数据帧小于64字节，发送方可能在发送完后才检测到冲突，此时无法自动重传。",
+    "difficulty": "medium",
+    "layer": "数据链路层",
+    "chapter": "3.3",
+    "section": "使用广播信道的数据链路层",
+    "references": [
+      "CSMA/CD",
+      "争用期",
+      "二进制指数退避算法",
+      "以太网帧格式"
+    ]
+  },
+  {
+    "text": "CSMA/CA（冲突避免）比CSMA/CD多出了哪些机制？",
+    "option_a": "CSMA/CA使用更大的帧",
+    "option_b": "CSMA/CA增加了RTS/CTS握手、ACK确认帧和随机退避等待（DIFS/SIFS）",
+    "option_c": "CSMA/CA不需要物理层",
+    "option_d": "两者完全相同",
+    "correct_answer": "B",
+    "explanation": "CSMA/CA(Conflict Avoidance)用于无线局域网(Wi-Fi, IEEE 802.11)，因为在无线环境中无法检测冲突（存在隐藏终端问题）。额外机制：(1)RTS/CTS(Request To Send/Clear To Send)——发送前先预约信道；(2)ACK确认帧——每帧成功后接收方回复确认；(3)帧间间隔——DIFS(DCF帧间间隔)用于数据帧优先级，SIFS(短帧间间隔)用于ACK等控制帧；(4)随机退避——发送前随机等待一段时间，减少冲突概率。",
+    "difficulty": "medium",
+    "layer": "数据链路层",
+    "chapter": "3.3",
+    "section": "使用广播信道的数据链路层",
+    "references": [
+      "CSMA/CA",
+      "CSMA/CD",
+      "隐藏终端问题",
+      "RTS/CTS机制",
+      "IEEE 802.11"
+    ]
+  },
+  {
+    "text": "无线局域网中隐藏终端问题(Hidden Terminal Problem)是什么？",
+    "option_a": "攻击者隐藏在网络中窃取信息",
+    "option_b": "站A和站C互相听不到（都在AP覆盖范围但在彼此范围外），同时向AP发送导致冲突",
+    "option_c": "终端设备隐藏在柜子中信号不好",
+    "option_d": "路由器故障",
+    "correct_answer": "B",
+    "explanation": "隐藏终端问题：站A和站C都能与同一个接入点AP通信，但由于距离原因，A和C互相收不到对方的无线信号（彼此在对方通信范围之外）。A正在向AP发送数据时，C可能也认为信道空闲并发送，在AP处产生冲突。CSMA/CD无法解决此问题（因为A和C互相检测不到冲突），CSMA/CA通过RTS/CTS机制解决：A发送RTS给AP，AP回复CTS广播给范围内所有站（包括C），C收到CTS后知道信道已被预约，延迟发送。",
+    "difficulty": "medium",
+    "layer": "数据链路层",
+    "chapter": "3.3",
+    "section": "使用广播信道的数据链路层",
+    "references": [
+      "CSMA/CA",
+      "隐藏终端问题",
+      "RTS/CTS机制",
+      "IEEE 802.11"
+    ]
+  },
+  {
+    "text": "暴露终端问题(Exposed Terminal Problem)的描述正确的是？",
+    "option_a": "与隐藏终端相同",
+    "option_b": "站A向站B发送时，邻居站C因为监听信道繁忙而无法向站D发送，尽管C到D的传输不影响A到B",
+    "option_c": "终端设备过热导致的问题",
+    "option_d": "信号被遮挡",
+    "correct_answer": "B",
+    "explanation": "暴露终端问题是隐藏终端的对偶问题：站A正在向站B发送数据，站C在A的通信范围内因此能听到A的信号，但C想向站D（不在A、B通信范围内）发送数据。如果C因为信道繁忙而退避，就会浪费了C→D这段完全不受A→B影响的通信机会。这是CSMA/CA的一个保守性缺陷，相比CSMA/CD在某些场景下会降低信道利用率。通过定向天线和功率控制等技术可以缓解。",
+    "difficulty": "hard",
+    "layer": "数据链路层",
+    "chapter": "3.3",
+    "section": "使用广播信道的数据链路层",
+    "references": [
+      "CSMA/CA",
+      "隐藏终端问题",
+      "RTS/CTS机制",
+      "IEEE 802.11"
+    ]
+  },
+  {
+    "text": "以太网交换机采用什么转发方式时延迟最小？",
+    "option_a": "存储转发交换",
+    "option_b": "直通交换（Cut-Through）",
+    "option_c": "碎片隔离交换",
+    "option_d": "广播转发",
+    "correct_answer": "B",
+    "explanation": "交换机三种转发方式：(1)直通交换——只读取目的MAC地址（仅前6字节），立即开始转发，延迟极小（仅约10μs），但不检查CRC错误；(2)存储转发——接收完整帧并验证CRC后再转发，最可靠但延迟大；(3)碎片隔离（Fragment-Free）——读取前64字节（最小的合法帧长度）后才转发，是直通和存储转发的折中方案，可以过滤掉因冲突产生的碎片帧（<64字节）。现代交换机通常使用存储转发方式，硬件处理速度已足够快。",
+    "difficulty": "medium",
+    "layer": "数据链路层",
+    "chapter": "3.4",
+    "section": "扩展的以太网",
+    "references": [
+      "交换机",
+      "存储转发交换",
+      "直通交换",
+      "碎片隔离交换"
+    ]
+  },
+  {
+    "text": "生成树协议（STP）解决的核心问题是什么？",
+    "option_a": "加速网络传输",
+    "option_b": "消除以太网交换机环路，防止广播风暴和MAC地址表不稳定",
+    "option_c": "提高交换机端口的速率",
+    "option_d": "提供VLAN功能",
+    "correct_answer": "B",
+    "explanation": "STP(Spanning Tree Protocol, IEEE 802.1D)通过自动堵塞冗余链路，将网状物理拓扑转换为无环的逻辑树状结构。工作原理：(1)选举一个根桥(Root Bridge)；(2)各交换机计算到根桥的最短路径开销，确定根端口(Root Port)；(3)每条网段选举一个指定端口(Designated Port)；(4)非根端口和非指定端口进入阻塞(Blocking)状态。STP收敛时间约30-50秒，RSTP(802.1w)改进到1秒以内，MSTP(802.1s)支持多实例VLAN负载分担。",
+    "difficulty": "medium",
+    "layer": "数据链路层",
+    "chapter": "3.4",
+    "section": "扩展的以太网",
+    "references": [
+      "STP",
+      "RSTP",
+      "MSTP",
+      "交换机",
+      "交换机环路",
+      "广播域"
+    ]
+  },
+  {
+    "text": "链路聚合(Link Aggregation, LACP)的作用是什么？",
+    "option_a": "将交换机上多个物理端口捆绑成一个逻辑链路，增加带宽和提供冗余",
+    "option_b": "连接不同类型的网络",
+    "option_c": "加密传输的数据",
+    "option_d": "将广播域划分为多个VLAN",
+    "correct_answer": "A",
+    "explanation": "链路聚合(LACP, IEEE 802.3ad，现纳入802.1AX)将多个物理以太网链路捆绑为单个逻辑链路(Link Aggregation Group, LAG)。好处：(1)增加带宽——n条千兆链路聚合为n Gbps；(2)冗余——其中一条物理链路故障只降低总带宽，逻辑链路不中断；(3)负载分担——流量在多条物理链路上分散传输（通常按MAC/IP/端口Hash分配）。常用于交换机与交换机、交换机与服务器之间的上行链路（Uplink）。",
+    "difficulty": "medium",
+    "layer": "数据链路层",
+    "chapter": "3.4",
+    "section": "扩展的以太网",
+    "references": [
+      "链路聚合",
+      "LACP",
+      "交换机"
+    ]
+  },
+  {
+    "text": "冲突域和广播域的概念区别是什么？",
+    "option_a": "两者是同一概念",
+    "option_b": "冲突域是共享同一物理介质的设备集合（集线器所有端口在一个冲突域），广播域是能收到同一广播帧的设备集合",
+    "option_c": "冲突域由路由器隔离，广播域由交换机隔离",
+    "option_d": "交换机的每个端口属于同一个冲突域",
+    "correct_answer": "B",
+    "explanation": "冲突域(Collision Domain)：一组设备的帧发送可能互相冲突的范围。集线器所有端口在一个冲突域内；交换机每个端口是独立的冲突域（无冲突）；路由器每个端口也是独立冲突域。广播域(Broadcast Domain)：能收到同一广播帧的设备范围。交换机和集线器的所有端口默认在一个广播域内（收到广播帧会转发到所有端口），而路由器的每个端口属于不同广播域（路由器不转发广播帧）。VLAN可以将一台交换机划分为多个广播域。",
+    "difficulty": "medium",
+    "layer": "数据链路层",
+    "chapter": "3.4",
+    "section": "扩展的以太网",
+    "references": [
+      "冲突域",
+      "广播域",
+      "交换机",
+      "VLAN",
+      "集线器"
+    ]
+  },
+  {
+    "text": "ATM（异步传递方式）与IP数据报服务相比有什么本质不同？",
+    "option_a": "ATM使用更大的数据包",
+    "option_b": "ATM是面向连接的虚电路服务，需要对每个连接维护状态，而IP是无连接的数据报服务",
+    "option_c": "ATM不使用光纤",
+    "option_d": "ATM只能在局域网中使用",
+    "correct_answer": "B",
+    "explanation": "ATM(Asynchronous Transfer Mode)采用面向连接的虚电路(VC)方式：通信前先通过信令建立虚通道(VPI)和虚通路(VCI)，在沿途交换机建立转发表项，之后所有信元(53字节固定长度)沿同一条路径传送。这保证了服务质量(QoS)、带宽预留和有序交付，但增加了信令开销和交换机状态维护成本。IP采用无连接数据报方式：每个分组独立选路，路由器不维护每条流的连接状态。最终，IP的简单性和可扩展性胜出，ATM逐渐淡出历史舞台，但其流量工程思想影响了MPLS。",
+    "difficulty": "hard",
+    "layer": "网络层",
+    "chapter": "4.1",
+    "section": "网络层提供的两种服务",
+    "references": [
+      "IP",
+      "IP地址",
+      "MPLS"
+    ]
+  },
+  {
+    "text": "为什么虚电路服务不适合互联网的核心设计哲学？",
+    "option_a": "虚电路速度太慢",
+    "option_b": "虚电路要求每个路由器为每条连接维护状态信息，当互联网规模扩展到数亿连接时，核心路由器状态爆炸",
+    "option_c": "虚电路不支持视频传输",
+    "option_d": "虚电路无法加密",
+    "correct_answer": "B",
+    "explanation": "互联网的端到端原则(End-to-End Principle)认为网络核心应尽可能简单（无状态的数据报转发），将所有复杂逻辑（可靠性、拥塞控制、安全）放在端系统。虚电路需要每个路由器为每条连接维持转发表项和状态（如ATM交换机需要维护每个VCI的表项），在数以亿计连接的互联网中，这会导致核心路由器状态爆炸，违背了可扩展性要求。这就是互联网为什么选择数据报服务——不是因为它比虚电路'更好'，而是它更适合全球规模的可扩展性需求。",
+    "difficulty": "hard",
+    "layer": "网络层",
+    "chapter": "4.1",
+    "section": "网络层提供的两种服务",
+    "references": [
+      "IP",
+      "路由器",
+      "MPLS"
+    ]
+  },
+  {
+    "text": "MPLS（多协议标签交换）在互联网中的定位是什么？",
+    "option_a": "完全取代IP协议",
+    "option_b": "在IP网络之上增加面向连接的标签交换，结合IP的灵活性和虚电路的流量工程能力",
+    "option_c": "仅用于局域网",
+    "option_d": "一种新的应用层协议",
+    "correct_answer": "B",
+    "explanation": "MPLS(Multiprotocol Label Switching)位于数据链路层和网络层之间（'2.5层'），在IP分组进入MPLS域时插入一个短标签(Label, 20位)，后续路由器根据标签快速转发（不再需要最长前缀匹配的IP路由查找）。MPLS结合了两者的优点：IP的灵活寻址和弹性和ATM/帧中继的快速转发和流量工程(Traffic Engineering, MPLS-TE)。广泛应用于ISP骨干网、VPN(MPLS VPN/L3VPN/L2VPN)等场景。",
+    "difficulty": "hard",
+    "layer": "网络层",
+    "chapter": "4.1",
+    "section": "网络层提供的两种服务",
+    "references": [
+      "MPLS",
+      "IP",
+      "路由器"
+    ]
+  },
+  {
+    "text": "IPv4首部中，哪种情况不会产生IP分片？",
+    "option_a": "当数据报长度超过路径中某段链路的MTU时",
+    "option_b": "设置DF(Don't Fragment)标志位=1的数据报，超过MTU时路由器丢弃并返回ICMP不可达报文",
+    "option_c": "当数据报长度小于链路层MTU时",
+    "option_d": "当路由器缓冲区已满时",
+    "correct_answer": "B",
+    "explanation": "IPv4首部标志字段有3位：保留位+DF(Don't Fragment)+MF(More Fragment)。当DF=1时，路由器不允许分片该数据报。如果遇到MTU小于数据报大小的链路，路由器将其丢弃并向源主机发回ICMP目的不可达报文（需分片但DF置位）。这是路径MTU发现(Path MTU Discovery)的机制基础：源主机逐步减小数据报大小直到能成功到达，从而确定路径MTU。IPv6规定路由器一律不分片，必须由源主机执行Path MTU Discovery——这也是IPv6取消了分片字段的原因。",
+    "difficulty": "hard",
+    "layer": "网络层",
+    "chapter": "4.2",
+    "section": "网际协议 IP",
+    "references": [
+      "IP",
+      "IP分片与重组",
+      "MTU",
+      "ICMP",
+      "IPv4首部格式"
+    ]
+  },
+  {
+    "text": "ICMP协议中，Ping工具最基本的功能使用哪两种ICMP报文类型？",
+    "option_a": "目的不可达和时间戳",
+    "option_b": "回显请求（类型8）和回显应答（类型0）",
+    "option_c": "源站抑制和重定向",
+    "option_d": "参数问题和超时",
+    "correct_answer": "B",
+    "explanation": "Ping(Packet Internet Groper)利用ICMP回显请求(Echo Request, ICMP Type 8)和回显应答(Echo Reply, ICMP Type 0)两种报文。源主机发送Echo Request，目的主机收到后回复Echo Reply。Ping通过测量往返时间(RTT)和丢包情况来评估网络连通性和质量。Ping是最基本的网络排障工具——'能不能Ping通'通常是网络问题诊断的第一步，但部分网络会禁用ICMP导致Ping不通但实际通信正常（如防火墙策略）。",
+    "difficulty": "medium",
+    "layer": "网络层",
+    "chapter": "4.4",
+    "section": "网际控制报文协议 ICMP",
+    "references": [
+      "ICMP",
+      "ICMP报文类型"
+    ]
+  },
+  {
+    "text": "ICMP重定向报文的作用是什么？",
+    "option_a": "通知源主机重新发送数据",
+    "option_b": "路由器通知主机存在更优的下一跳路由，建议主机修改路由表",
+    "option_c": "请求路由器修改配置",
+    "option_d": "加密通信内容",
+    "correct_answer": "B",
+    "explanation": "ICMP重定向(Redirect, Type 5)用于优化本地路由。场景：主机有数据要发往外网，配置的默认网关是R1。主机将数据发给R1，R1查路由表发现同一数据应该通过同网段的R2转发更近，且R2和主机在同一子网内。R1将数据转发给R2，同时向主机发送ICMP重定向报文告知R2的IP地址。主机收到后在路由缓存中添加一条到目标网络经R2的主机路由，后续数据直接发给R2。这减少了不必要的一跳转发。不过出于安全考虑，许多系统默认忽略ICMP重定向（防止路由劫持攻击）。",
+    "difficulty": "hard",
+    "layer": "网络层",
+    "chapter": "4.4",
+    "section": "网际控制报文协议 ICMP",
+    "references": [
+      "ICMP",
+      "ICMP报文类型",
+      "路由器",
+      "路由表"
+    ]
+  },
+  {
+    "text": "RIP协议基于什么算法？它的最大跳数限制是多少？",
+    "option_a": "Dijkstra算法，最大跳数15",
+    "option_b": "Bellman-Ford距离向量算法，最大跳数15（16表示不可达）",
+    "option_c": "链路状态算法，无最大跳数限制",
+    "option_d": "最短路径优先，最大跳数255",
+    "correct_answer": "B",
+    "explanation": "RIP(Routing Information Protocol)是距离向量路由协议，基于Bellman-Ford算法。每个路由器维护到每个目的网络的距离向量（跳数），定期(30秒)向邻居广播自己的完整路由表。关键限制：(1)最大跳数15（16表示无穷大/不可达），限制了网络直径；(2)收敛慢——好消息传得快，坏消息传得慢（无穷计数问题，Count-to-Infinity）；(3)不支持VLSM/CIDR（RIPv1限制，RIPv2支持）。因这些限制，RIP仅适用于小型简单网络。",
+    "difficulty": "medium",
+    "layer": "网络层",
+    "chapter": "4.5",
+    "section": "互联网的路由选择协议",
+    "references": [
+      "RIP",
+      "Bellman-Ford算法",
+      "动态路由",
+      "OSPF",
+      "BGP"
+    ]
+  },
+  {
+    "text": "OSPF协议中，DR（指定路由器）和BDR（备份指定路由器）的作用是什么？",
+    "option_a": "增加网络复杂度",
+    "option_b": "在广播多路访问网络（如以太网）中减少LSA泛洪：所有非DR路由器只与DR/BDR建立邻接关系",
+    "option_c": "提供DNS服务",
+    "option_d": "负责加密路由信息",
+    "correct_answer": "B",
+    "explanation": "在广播多路访问(Broadcast Multi-Access, BMA)网络中（如以太网），n个路由器互相建立邻接(Adjacency)需要n(n-1)/2条邻接关系，LSA泛洪会产生大量重复信息。OSPF通过选举DR和BDR来解决：所有非DR路由器(DRother)只与DR和BDR建立完全邻接关系，DRother之间保持2-Way状态不交换LSA更新。DR失效时BDR立即接替。选举规则：优先级高的当选，优先级相同则Router ID大的当选。在点对点链路上不需要选举DR。",
+    "difficulty": "hard",
+    "layer": "网络层",
+    "chapter": "4.5",
+    "section": "互联网的路由选择协议",
+    "references": [
+      "OSPF",
+      "OSPF区域划分",
+      "OSPF LSA类型"
+    ]
+  },
+  {
+    "text": "BGP（边界网关协议）和IGP（内部网关协议）最根本的区别是什么？",
+    "option_a": "BGP使用TCP，IGP使用UDP",
+    "option_b": "IGP关注最优路径（速度/带宽），BGP关注策略路由——路径选择受商业关系和政治策略驱动",
+    "option_c": "IGP比BGP更安全",
+    "option_d": "BGP只能用于IPv6",
+    "correct_answer": "B",
+    "explanation": "IGP(如OSPF、RIP)的目标是找到到达目的网络的最短/最快速路径（以带宽或跳数为度量），关注技术效率。BGP(Border Gateway Protocol)运行在不同自治系统(AS)之间，路径选择受商业策略驱动：(1)流量工程——选择成本最低的peer链路；(2)商业关系——优先选客户宣告的路由（能带来收入的流量）；(3)安全策略——过滤掉不应宣告的私有/恶意前缀；(4)政治因素——不经过某些国家的网络。BGP的路径属性(Local Pref, MED, AS Path, Community)都是为了支持这种策略路由。",
+    "difficulty": "hard",
+    "layer": "网络层",
+    "chapter": "4.5",
+    "section": "互联网的路由选择协议",
+    "references": [
+      "BGP",
+      "BGP路由属性",
+      "OSPF",
+      "自治系统",
+      "路径向量算法"
+    ]
+  },
+  {
+    "text": "IPv6的SLAAC（无状态地址自动配置）是什么意思？",
+    "option_a": "必须由DHCPv6服务器分配IPv6地址",
+    "option_b": "主机可根据路由器通告的前缀和自身MAC地址（EUI-64）生成IPv6全球单播地址，无需DHCP",
+    "option_c": "只能使用静态IP配置",
+    "option_d": "IPv4和IPv6之间的地址转换",
+    "correct_answer": "B",
+    "explanation": "SLAAC(Stateless Address Autoconfiguration)是IPv6的一大特色功能。过程：(1)路由器周期发送RA(Router Advertisement)报文，包含网络前缀（如2001:db8::/64）；(2)主机使用EUI-64方法将48位MAC地址转换为64位接口ID（在MAC中插入FFFE），组合得到全球单播地址；(3)主机进行重复地址检测(DAD)确认无冲突后启用该地址。SLAAC实现了真正的即插即用(Plug-and-Play)，主机无需任何配置或DHCP服务器即可自动获得IPv6地址。有状态配置(DHCPv6)用于需要集中管理地址或其他参数(如DNS)的场景。",
+    "difficulty": "medium",
+    "layer": "网络层",
+    "chapter": "4.6",
+    "section": "IPv6",
+    "references": [
+      "IPv6",
+      "SLAAC",
+      "IPv6地址类型",
+      "DHCPv6"
+    ]
+  },
+  {
+    "text": "IGMP Snooping的作用是什么？",
+    "option_a": "在路由器上配置IGMP协议",
+    "option_b": "交换机监听IGMP报文，了解哪些端口有组播组成员，从而只向有成员的端口转发组播帧",
+    "option_c": "加密IGMP协议通信",
+    "option_d": "将IGMP升级到新版本",
+    "correct_answer": "B",
+    "explanation": "IGMP Snooping是二层交换机的组播优化技术。默认情况下，交换机会将组播帧广播到VLAN内的所有端口（等同于广播），浪费带宽。启用IGMP Snooping后，交换机监听(Snoop)主机和路由器之间的IGMP消息，建立组播组到端口的映射表，然后将组播帧只转发到有组成员（包括发送IGMP Join的端口和连接组播路由器的端口）的端口。这大幅减少了无谓的流量复制，是交换机的重要功能。",
+    "difficulty": "medium",
+    "layer": "网络层",
+    "chapter": "4.7",
+    "section": "IP 多播",
+    "references": [
+      "IGMP",
+      "组播",
+      "交换机"
+    ]
+  },
+  {
+    "text": "在组播环境中，RPF（逆向路径转发）检查的目的是什么？",
+    "option_a": "提高转发速度",
+    "option_b": "确保组播数据包是从其源地址的正确接口到达的，防止组播环路和重复数据包",
+    "option_c": "加密组播数据",
+    "option_d": "检查数据包的大小",
+    "correct_answer": "B",
+    "explanation": "RPF(Reverse Path Forwarding)是多播路由的核心机制。路由器收到多播包后检查：该包是否从到达该多播源的最佳单播路径的接口（即RPF接口）收到？如果是，则向其他多播接口转发；如果不是，则丢弃此包。为什么需要RPF？因为多播使用组地址(D类IP)作为目的地址，无法通过目的IP查找路由表来确定正确转发方向。RPF使用源IP查单播路由表反向验证，是防止多播环路和重复报文的关键。",
+    "difficulty": "hard",
+    "layer": "网络层",
+    "chapter": "4.7",
+    "section": "IP 多播",
+    "references": [
+      "组播",
+      "IGMP",
+      "路由器"
+    ]
+  },
+  {
+    "text": "NAT转换中，NAPT（网络地址端口转换）与基本NAT的区别是什么？",
+    "option_a": "NAPT只转换IP，NAT转换端口",
+    "option_b": "NAPT使用传输层端口号来区分不同内网主机的连接，实现多台主机共享单个公网IP地址",
+    "option_c": "NAPT不需要端口",
+    "option_d": "两者完全相同",
+    "correct_answer": "B",
+    "explanation": "基本NAT(Static NAT/一对一NAT)：一个内网私有IP映射到一个公网IP，需要多个公网IP才能服务多台主机，未真正节省IP。NAPT(Network Address and Port Translation，也称PAT或IP Masquerade)：使用{公网IP + 端口号}来区分不同的内网主机连接，使多台主机可共享同一个公网IP地址（通过不同的源端口号区分）。这是家庭路由器最常用的NAT方式——家中所有设备（手机、电脑、智能电视）通过一个公网IP上网，路由器为每个连接分配不同的源端口并进行转换。",
+    "difficulty": "medium",
+    "layer": "网络层",
+    "chapter": "4.8",
+    "section": "虚拟专用网 VPN 和网络地址转换 NAT",
+    "references": [
+      "NAT"
+    ]
+  },
+  {
+    "text": "为什么说NAT破坏了IP的端到端通信模型？",
+    "option_a": "NAT降低了传输速度",
+    "option_b": "NAT后的主机在网络层不可见：外网主机无法直接向内网主机发起连接，因为公网IP属于NAT设备而非内网主机",
+    "option_c": "NAT修改了数据包的大小",
+    "option_d": "NAT增加了数据包的跳数",
+    "correct_answer": "B",
+    "explanation": "端到端原则(End-to-End Principle)要求通信的源和目的主机可以直接通过IP相互寻址和通信。NAT的致命破坏：(1)内网主机的私有IP不可路由，外网主机只知道NAT设备的公网IP而不知道内网主机；(2)外网主机无法主动向内网主机发起TCP连接（因为没有NAT映射表项），这破坏了P2P、VoIP、在线游戏等需要双向连接的应用模式；(3)NAT设备必须修改IP/TCP/UDP首部（地址和校验和），破坏了完整性和中间设备透明性原则。这就是IPv6设计目标之一是恢复端到端通信的原因。",
+    "difficulty": "medium",
+    "layer": "网络层",
+    "chapter": "4.8",
+    "section": "虚拟专用网 VPN 和网络地址转换 NAT",
+    "references": [
+      "NAT",
+      "IP地址",
+      "IPv6"
+    ]
+  },
+  {
+    "text": "TCP和UDP在以下哪个方面存在根本区别？",
+    "option_a": "都使用端口号",
+    "option_b": "TCP提供面向连接和可靠传输，UDP提供无连接和不可靠传输",
+    "option_c": "都支持全双工",
+    "option_d": "都使用滑动窗口",
+    "correct_answer": "B",
+    "explanation": "TCP和UDP是传输层的两种核心协议，定位互补：TCP面向连接、可靠、有序、有流量控制和拥塞控制，适合文件传输、电子邮件、网页浏览等需要数据完整性的应用。UDP无连接、不可靠、无序、无流量控制和拥塞控制，但开销小（首部仅8字节）、发送快（不需要握手），适合实时音视频通话、DNS查询、在线游戏等对时延敏感、能容忍少量丢包的应用。两者都使用端口号来区分进程，但实现传输的方式完全不同。",
+    "difficulty": "basic",
+    "layer": "传输层",
+    "chapter": "5.1",
+    "section": "运输层协议概述",
+    "references": [
+      "TCP",
+      "UDP",
+      "端口号"
+    ]
+  },
+  {
+    "text": "运输层端口号的分配范围是怎样的？",
+    "option_a": "0-65535全部可以随意使用",
+    "option_b": "0-1023为知名端口(Well-Known Ports)，1024-49151为注册端口(Registered Ports)，49152-65535为动态/私有端口",
+    "option_c": "没有固定分类",
+    "option_d": "仅有0-1023可用",
+    "correct_answer": "B",
+    "explanation": "端口号(IANA分配)：知名端口(0-1023)分配给标准服务：HTTP=80、SSH=22、SMTP=25、DNS=53、HTTPS=443等，只能由系统管理员(root)启动的进程绑定；注册端口(1024-49151)由IANA登记分配给特定应用但非强制：如MySQL=3306、Redis=6379、Tomcat=8080；动态/私有端口(49152-65535)供客户端临时使用（ephemeral port），操作系统从该范围中自动选择一个空闲端口作为客户端连接的源端口。",
+    "difficulty": "medium",
+    "layer": "传输层",
+    "chapter": "5.1",
+    "section": "运输层协议概述",
+    "references": [
+      "TCP",
+      "UDP",
+      "端口号"
+    ]
+  },
+  {
+    "text": "以下哪些应用场景更适合使用TCP而不是UDP？",
+    "option_a": "实时视频会议和VoIP语音通话",
+    "option_b": "文件传输(FTP)和电子邮件(SMTP)",
+    "option_c": "在线射击游戏（FPS类）的位置同步",
+    "option_d": "DNS域名查询",
+    "correct_answer": "B",
+    "explanation": "选择TCP还是UDP取决于应用对可靠性vs实时性的权衡。文件传输和邮件丢失任何数据都会导致文件损坏或邮件内容丢失，所以必须使用TCP保证可靠性和完整性。实时视频会议丢几个语音帧不会严重影响通话质量（人脑有补偿能力），但等待重传导致的延迟会严重破坏实时的对话体验，因此用UDP。在线FPS游戏的位置更新需要最低的延迟(UDP)，而账号登录信息需要可靠传输(TCP)——因此游戏通常TCP和UDP混用。DNS通常用UDP(速度)，但在响应超过512字节或区域传输时使用TCP。",
+    "difficulty": "medium",
+    "layer": "传输层",
+    "chapter": "5.1",
+    "section": "运输层协议概述",
+    "references": [
+      "TCP",
+      "UDP",
+      "UDP应用协议",
+      "端口号"
+    ]
+  },
+  {
+    "text": "以下哪些协议同时使用了TCP和UDP？",
+    "option_a": "FTP",
+    "option_b": "DNS（域名系统）",
+    "option_c": "SMTP",
+    "option_d": "HTTP",
+    "correct_answer": "B",
+    "explanation": "DNS是少数同时使用TCP和UDP的应用层协议。DNS的普通域名查询使用UDP 53端口（请求-响应短报文，追求低延迟，EDNS0支持最大4096字节）；当响应超过4096字节或进行区域传输(AXFR/IXFR)时，DNS使用TCP 53端口来保证大量数据的可靠传输。FTP使用两个TCP连接（控制连接和数据连接）；SMTP仅使用TCP 25端口；HTTP/HTTPS仅使用TCP 80/443（HTTP/3使用QUIC/UDP）。",
+    "difficulty": "hard",
+    "layer": "传输层",
+    "chapter": "5.1",
+    "section": "运输层协议概述",
+    "references": [
+      "TCP",
+      "UDP",
+      "DNS",
+      "FTP",
+      "HTTP",
+      "端口号"
+    ]
+  },
+  {
+    "text": "UDP检验和字段在IPv4和IPv6中的区别是什么？",
+    "option_a": "没有区别",
+    "option_b": "IPv4中UDP检验和是可选的（值为0表示发送方未计算），IPv6中UDP检验和是强制必须计算的",
+    "option_c": "IPv4中UDP没有检验和字段",
+    "option_d": "IPv6中取消了UDP检验和",
+    "correct_answer": "B",
+    "explanation": "IPv4中UDP检验和字段为可选项，发送方如果不计算则设为全0（接收方不验证）。IPv6中取消了IP首部检验和后，对上层协议的差错检测要求更高，因此UDP检验和变为强制必须计算。UDP检验和覆盖：UDP伪首部(源IP+目的IP+协议号+UDP长度) + UDP首部 + UDP数据。伪首部的存在使UDP能检测到IP头部信息（特别是源/目的IP地址）在传输中的错误，确保数据被投递到正确的主机和进程。",
+    "difficulty": "hard",
+    "layer": "传输层",
+    "chapter": "5.2",
+    "section": "用户数据报协议 UDP",
+    "references": [
+      "UDP",
+      "UDP数据报格式",
+      "端口号",
+      "IPv6"
+    ]
+  },
+  {
+    "text": "在什么情况下更适合使用UDP而不是TCP？",
+    "option_a": "传输大文件",
+    "option_b": "需要低延迟且允许部分丢包的实时多媒体通信，如VoIP和视频直播",
+    "option_c": "发送电子邮件",
+    "option_d": "网页浏览",
+    "correct_answer": "B",
+    "explanation": "UDP的优势在：(1)低开销——8字节首部vs TCP的20-60字节；(2)无连接——不需要握手，第一个数据包即承载数据（0-RTT）；(3)无拥塞控制——发送速率不由网络拥塞自动调节，适合需要稳定码率的流媒体；(4)支持多播和广播——TCP仅支持一对一；(5)实时性强——不等待重传，丢失的数据直接跳过。这些特性使UDP天然适合实时音视频(VoIP/WebRTC)、在线游戏(位置更新)、IoT传感器数据上报等对时效性要求高、能容忍少量数据丢失的场景。",
+    "difficulty": "medium",
+    "layer": "传输层",
+    "chapter": "5.2",
+    "section": "用户数据报协议 UDP",
+    "references": [
+      "UDP",
+      "TCP",
+      "UDP应用协议"
+    ]
+  },
+  {
+    "text": "TCP报文段中，紧急指针（Urgent Pointer）字段的含义是什么？",
+    "option_a": "标记紧急数据在报文段中的偏移位置",
+    "option_b": "当URG控制位=1时，表示从本报文段序号开始到紧急指针所指字节为止的数据为紧急数据，接收方应优先处理",
+    "option_c": "用于流量控制",
+    "option_d": "用于拥塞控制",
+    "correct_answer": "B",
+    "explanation": "紧急数据机制(URG标志+紧急指针)允许发送方在发送的数据流中标记一段紧急数据，使接收方优先处理（如Telnet中Ctrl+C中断命令、FTP中中止文件传输命令）。紧急指针指向紧急数据的最后一个字节的下一个位置。然而，URG机制在实际实现中存在混乱和安全隐患（不同的操作系统对紧急指针的解释不同），现代协议栈几乎不使用此功能，更多通过应用层协议自身来处理控制消息（如HTTP/2的流优先级和RST_STREAM帧）。",
+    "difficulty": "hard",
+    "layer": "传输层",
+    "chapter": "5.5",
+    "section": "TCP 报文段的首部格式",
+    "references": [
+      "TCP",
+      "TCP首部格式",
+      "TCP控制标志位"
+    ]
+  },
+  {
+    "text": "TCP的选项字段中，时间戳选项(Timestamp)的作用是什么？",
+    "option_a": "记录数据的创建时间",
+    "option_b": "精确计算RTT（往返时间）和防止序号回绕(PAWS)",
+    "option_c": "加密数据",
+    "option_d": "替代序号",
+    "correct_answer": "B",
+    "explanation": "TCP时间戳选项(Timestamp Option, RFC 7323)有两大作用：(1)更精确的RTT测量(RTTM)——发送方在报文段中放入发送时间戳，接收方在ACK中回显该时间戳，这样发送方收到ACK时可以精确计算RTT，解决了Karn算法无法区分原报文和重传报文ACK的问题；(2)PAWS(Protection Against Wrapped Sequence numbers)——在高速网络中(10Gbps+)，32位序号可能在短时间内(约17秒)就回绕，时间戳提供了附加的时间维度来区分新旧报文段。",
+    "difficulty": "hard",
+    "layer": "传输层",
+    "chapter": "5.5",
+    "section": "TCP 报文段的首部格式",
+    "references": [
+      "TCP",
+      "TCP首部格式",
+      "TCP选项字段",
+      "TCP序号回绕"
+    ]
+  },
+  {
+    "text": "TCP的选择确认（SACK）选项解决什么问题？",
+    "option_a": "在一个RTT内只重传真正丢失的报文段，而不是重传从丢包序号起的所有后续报文段",
+    "option_b": "在一个RTT内只重传真正丢失的报文段，而不是重传从丢包序号起的所有后续报文段（同上）",
+    "option_c": "在一个RTT内只重传真正丢失的报文段，而不是重传从丢包序号起的所有后续报文段（同上）",
+    "option_d": "在一个RTT内只重传真正丢失的报文段，而不是重传从丢包序号起的所有后续报文段（同上）",
+    "correct_answer": "A",
+    "explanation": "SACK(Selective Acknowledgment, RFC 2018)是对TCP确认机制的增强。标准TCP累积确认：ACK N表示前N-1字节都已收到，但不告知发送方N之后的哪些报文段已到达。SACK允许接收方在ACK选项中告知已收到的非连续字节范围（例如ACK 1000, SACK 1500-2000），这样发送方能精确只重传真正丢失的报文段(1000-1499)，在一个RTT内可恢复多个丢失。SACK显著提高了高延迟、高丢包(卫星链路、无线网络)场景下的TCP吞吐量。",
+    "difficulty": "hard",
+    "layer": "传输层",
+    "chapter": "5.6",
+    "section": "TCP 可靠传输的实现",
+    "references": [
+      "TCP",
+      "TCP SACK",
+      "可靠传输",
+      "滑动窗口"
+    ]
+  },
+  {
+    "text": "延迟确认（Delayed ACK）的目的是什么？",
+    "option_a": "减少确认次数：如果收到连续报文段，不是每个都回复ACK，而是延迟等待看是否有数据要捎带，或累计多个报文段再确认",
+    "option_b": "延长数据的传输时间",
+    "option_c": "确认数据已经到达应用层",
+    "option_d": "延迟发送数据",
+    "correct_answer": "A",
+    "explanation": "延迟确认(Delayed ACK, RFC 1122)的优化原理：(1)如果有数据要回复，趁机捎带(Piggyback)ACK到数据报文段中；(2)如果没有数据要发，等待一小段时间(通常200-500ms)，期望积累 2个报文段后一次性确认，减少纯ACK报文段数量。典型实现中每收到2个完整报文段回复一个ACK，或延迟不超过500ms。这种优化减少了约50%的ACK报文段，但也可能偶尔引入延迟（如果发送方在等待ACK而接收方在延迟确认）。Nagle算法+延迟确认的组合在某些情况下可能导致严重的性能问题（'TCP糊涂窗口综合征'的变体）。",
+    "difficulty": "medium",
+    "layer": "传输层",
+    "chapter": "5.6",
+    "section": "TCP 可靠传输的实现",
+    "references": [
+      "TCP",
+      "延迟确认",
+      "Nagle算法",
+      "可靠传输"
+    ]
+  },
+  {
+    "text": "TCP的糊涂窗口综合征（Silly Window Syndrome）是什么？",
+    "option_a": "窗口非常大时的问题",
+    "option_b": "发送方发送很小的数据块或接收方通告很小的窗口，导致TCP传输效率极低（大量带宽被首部开销占据）",
+    "option_c": "窗口随机变化的问题",
+    "option_d": "加密窗口导致的问题",
+    "correct_answer": "B",
+    "explanation": "糊涂窗口综合征(Silly Window Syndrome, SWS)是TCP性能问题：发送方每次只发很小数据或者接收窗口每次只通告很小的可用空间（如只多出1字节就通告），导致TCP报文段的数据部分很少而首部开销占比很大（'拿着很小的容器去运东西'）。解决方法：(1)发送端SWS——Nagle算法，在未确认数据小于MSS时延迟发送；(2)接收端SWS——Clark算法，等待接收缓冲区有足够空间（至少MSS或缓冲区的一半）后才通告非零窗口，避免通告很小的窗口值。",
+    "difficulty": "hard",
+    "layer": "传输层",
+    "chapter": "5.7",
+    "section": "TCP的流量控制",
+    "references": [
+      "TCP",
+      "流量控制",
+      "Nagle算法",
+      "零窗口探测"
+    ]
+  },
+  {
+    "text": "TCP粘包问题是什么？以及如何解决？",
+    "option_a": "TCP首部和数据之间的粘连问题",
+    "option_b": "TCP是面向字节流的协议，不保留报文边界：发送方多次发送的数据可能在接收方被一次读取，需要应用层自行界定消息边界",
+    "option_c": "数据包粘在网卡上",
+    "option_d": "只影响UDP",
+    "correct_answer": "B",
+    "explanation": "TCP粘包是面向字节流协议的自然结果：发送方连续调用3次send('AAAA'), send('BBBB'), send('CCCC')，这3段数据在TCP发送缓冲区中是连续的'AABBCC'，接收方可能一次recv就收到'AAAABBBBCCCC'，也可能分多次收到。TCP不区分消息边界——这就是所谓的'粘包'。解决方法(应用层协议设计)：(1)固定长度消息；(2)分隔符——如HTTP用\\r\\n分隔，Redis/SMTP用\\r\\n；(3)TLV格式(Type-Length-Value)——先发送消息类型和长度，再发送数据；(4)每个消息前加长度头——先读N字节得知消息长度，再读N字节获取消息内容。",
+    "difficulty": "medium",
+    "layer": "传输层",
+    "chapter": "5.7",
+    "section": "TCP的流量控制",
+    "references": [
+      "TCP",
+      "TCP粘包问题",
+      "流量控制"
+    ]
+  },
+  {
+    "text": "TCP Vegas拥塞控制与TCP Reno算法的核心区别是什么？",
+    "option_a": "Vegas使用UDP",
+    "option_b": "Vegas通过监测RTT变化来预测拥塞（在丢包之前就降速），Reno依赖丢包作为拥塞信号（事后反应）",
+    "option_c": "两套算法完全相同",
+    "option_d": "Vegas不提供拥塞控制",
+    "correct_answer": "B",
+    "explanation": "TCP Vegas采用不同于Reno的拥塞检测策略：(1)Reno基于丢包——被动等待丢包事件发生后才减小窗口，属于'事后反应'；(2)Vegas基于延迟——持续测量RTT，计算期望吞吐量(Window/RTT_min)与实际吞吐量(Window/RTT_actual)的差值Diff。当Diff<α时增加cwnd（网络较空闲），当Diff>β时减小cwnd（网络开始拥塞），当α<Diff<β时保持cwnd不变。Vegas能在丢包发生之前预测拥塞并提前降速，理论上更优（避免了丢包导致的超时重传），但在与Reno共存时因Vegas主动降速更早而吃亏，因此未广泛采用。",
+    "difficulty": "hard",
+    "layer": "传输层",
+    "chapter": "5.8",
+    "section": "TCP的拥塞控制",
+    "references": [
+      "TCP",
+      "拥塞控制",
+      "TCP Reno拥塞控制"
+    ]
+  },
+  {
+    "text": "TCP CUBIC拥塞控制算法的窗口增长方式是什么？",
+    "option_a": "线性增长",
+    "option_b": "基于三次函数：窗口增长取决于距离上次丢包的时间（不论RTT），使不同RTT的流公平竞争",
+    "option_c": "指数增长",
+    "option_d": "固定窗口大小",
+    "correct_answer": "B",
+    "explanation": "CUBIC是Linux内核的默认TCP拥塞控制算法(取代了之前的Reno)。其窗口增长函数是窗口=c×(t-K)³+Wmax的三次函数，其中t是距上次丢包的时间，Wmax是丢包时的窗口，K=(Wmax×β/c)^(1/3)，β=0.2（丢包后窗口乘性减小为原来的0.8）。设计核心思想：窗口增长只依赖时间(t)不依赖RTT，比Reno的AIMD(每RTT增加1)更公平——短RTT的流和长RTT的流(如卫星链路)窗口增长速度相同，而非Reno中短RTT流量享有不公平的优势。BBR则是更新的基于带宽-延迟积测量的拥塞控制算法。",
+    "difficulty": "hard",
+    "layer": "传输层",
+    "chapter": "5.8",
+    "section": "TCP的拥塞控制",
+    "references": [
+      "TCP",
+      "拥塞控制",
+      "TCP Cubic拥塞控制",
+      "TCP BBR拥塞控制"
+    ]
+  },
+  {
+    "text": "SYN Flood（SYN洪水）攻击利用TCP哪一特性？如何处理？",
+    "option_a": "利用TCP的FIN报文",
+    "option_b": "攻击者发送大量SYN报文但不完成三次握手，半连接队列(SYN Queue)被占满导致服务器无法接受新连接",
+    "option_c": "利用TCP的RST报文",
+    "option_d": "利用TCP的ACK报文",
+    "correct_answer": "B",
+    "explanation": "SYN Flood是最经典的DDoS攻击之一，利用TCP三次握手的特性：攻击者以伪造的(或无法应答的)源IP发送大量SYN报文，服务器为每个SYN分配半连接状态存入SYN队列(半连接队列，也称Backlog)，回复SYN-ACK并等待客户端的ACK。攻击者不回复(或故意不回复)ACK，服务器直到超时(通常几十秒到几分钟)才清除半连接状态。大量攻击SYN挤爆半连接队列，合法用户的SYN被丢弃。防御手段：SYN Cookie(SYN队列满时不分配状态信息而在ACK中加密携带信息验证)、SYN Cache、增加Backlog大小、SYN Proxy、以及scrubbing center清洗中心。",
+    "difficulty": "medium",
+    "layer": "传输层",
+    "chapter": "5.9",
+    "section": "TCP的运输连接管理",
+    "references": [
+      "TCP",
+      "SYN Cookie防御",
+      "SYN Flood攻击",
+      "三次握手"
+    ]
+  },
+  {
+    "text": "DNS解析过程中，根域名服务器(.)存储什么信息？",
+    "option_a": "所有域名和IP的映射",
+    "option_b": "仅顶级域名(TLD，如.com、.cn、.org)服务器的IP地址",
+    "option_c": "各自网络内的所有域名信息",
+    "option_d": "所有网站的网页内容",
+    "correct_answer": "B",
+    "explanation": "DNS采用层次化分布式设计。根域名服务器是全球DNS系统的入口，存储的是各顶级域名(Top-Level Domain)服务器的IP地址（如.com、.org、.cn、.net等的DNS服务器地址），而非具体的域名-IP映射。全球13组根服务器(字母A-M)通过任播(Anycast)技术在全球部署了数百个镜像节点。递归解析器收到查询后，首先向根服务器查询，根服务器返回对应TLD服务器的IP，依次迭代直到获取最终结果。这就是DNS的层次化分布式设计。",
+    "difficulty": "medium",
+    "layer": "应用层",
+    "chapter": "6.1",
+    "section": "域名系统 DNS",
+    "references": [
+      "DNS",
+      "DNS解析过程",
+      "域名"
+    ]
+  },
+  {
+    "text": "A记录和CNAME记录的区别是什么？",
+    "option_a": "两者没有区别",
+    "option_b": "A记录将域名直接映射到IPv4地址，CNAME将域名作为另一个域名的别名",
+    "option_c": "A记录用于邮件服务器，CNAME用于HTTP服务器",
+    "option_d": "A记录是不安全的，CNAME是加密的",
+    "correct_answer": "B",
+    "explanation": "A(Address)记录将域名直接映射到一个IPv4地址（AAAA记录将域名映射到IPv6地址）。CNAME(Canonical Name)记录将一个域名设置为另一个域名的规范别名——DNS解析器遇到CNAME时继续解析目标域名的A记录，而不是直接返回IP。例如：www.example.com可以是CNAME指向example.com，这样只需更新example.com的A记录即可使www子域名自动跟随。注意：CNAME不能与同名的其他记录共存（根域名的CNAME和MX/NS记录冲突），这是常见的DNS配置错误。",
+    "difficulty": "medium",
+    "layer": "应用层",
+    "chapter": "6.1",
+    "section": "域名系统 DNS",
+    "references": [
+      "DNS",
+      "DNS记录类型",
+      "域名"
+    ]
+  },
+  {
+    "text": "DNS缓存投毒（DNS Cache Poisoning）攻击的原理是什么？",
+    "option_a": "修改DNS服务器上的文件",
+    "option_b": "向DNS递归解析器发送伪造的DNS应答，污染其缓存使后续查询返回攻击者控制的IP地址",
+    "option_c": "删除DNS缓存",
+    "option_d": "加密DNS缓存",
+    "correct_answer": "B",
+    "explanation": "DNS缓存投毒攻击（又称DNS欺骗）利用DNS使用UDP+无状态验证的弱点：攻击者在真实的DNS权威服务器回复之前，向递归解析器发送大量伪造的DNS应答（猜测Transaction ID和源端口），如果猜中则被DNS解析器接受并缓存。之后所有查询被污染域名的用户都会被引导到攻击者IP。防御措施：DNSSEC——对DNS记录进行数字签名验证，保证应答的真实性和完整性；DNS查询源端口随机化+Transaction ID随机化——增加攻击者猜测难度；DNS over TLS/HTTPS——加密DNS通信防止中间人篡改。",
+    "difficulty": "medium",
+    "layer": "应用层",
+    "chapter": "6.1",
+    "section": "域名系统 DNS",
+    "references": [
+      "DNS",
+      "DNS安全",
+      "DNS解析过程"
+    ]
+  },
+  {
+    "text": "DNS over HTTPS (DoH)相比传统DNS (UDP 53)的优势是什么？",
+    "option_a": "降低了传输速度",
+    "option_b": "利用HTTPS加密DNS查询，防止中间人窃听、篡改和运营商DNS劫持",
+    "option_c": "增加了DNS服务器负载",
+    "option_d": "只需要TCP不需要UDP",
+    "correct_answer": "B",
+    "explanation": "DoH(DNS over HTTPS, RFC 8484)将DNS查询封装在HTTPS请求中（TCP 443端口），提供：(1)加密——所有DNS查询/响应都由TLS加密，ISP无法看到你查询了什么域名；(2)防篡改——中间人无法修改DNS响应；(3)防劫持——绕过运营商的DNS劫持（将不存在的域名重定向到广告页）。缺点：(1)将DNS流量隐藏在HTTPS中使企业安全DNS过滤失效；(2)可能将所有DNS查询集中到少数DoH提供商（如Cloudflare 1.1.1.1、Google 8.8.8.8），带来隐私集中化问题。DoT(DNS over TLS, TCP 853端口)是另一个加密DNS方案。",
+    "difficulty": "medium",
+    "layer": "应用层",
+    "chapter": "6.1",
+    "section": "域名系统 DNS",
+    "references": [
+      "DNS",
+      "DNS安全",
+      "TLS",
+      "HTTPS"
+    ]
+  },
+  {
+    "text": "SFTP和FTPS的区别是什么？",
+    "option_a": "两者完全相同",
+    "option_b": "SFTP是通过SSH的文件传输协议，FTPS是FTP over TLS/SSL",
+    "option_c": "SFTP使用FTP端口，FTPS使用HTTP端口",
+    "option_d": "SFTP不加密，FTPS加密",
+    "correct_answer": "B",
+    "explanation": "SFTP(SSH File Transfer Protocol)是基于SSH协议的文件传输子系统，使用SSH端口22，与FTP无关——它是SSH的一个扩展，所有通信（包括认证和文件传输）都由SSH加密。FTPS(FTP over SSL/TLS)是传统FTP的安全版本，仍使用FTP的双连接架构（控制连接21+数据连接），但在连接上叠加TLS/SSL加密。FTPS需要防火墙额外开放多个端口给数据连接（被动模式下服务器开放随机端口范围），而SFTP只需开放SSH 22一个端口，因此后者在防火墙友好的环境中更受欢迎。",
+    "difficulty": "medium",
+    "layer": "应用层",
+    "chapter": "6.2",
+    "section": "文件传送协议",
+    "references": [
+      "FTP",
+      "SSH",
+      "TLS",
+      "FTP主动模式与被动模式"
+    ]
+  },
+  {
+    "text": "FTP为什么有主动模式和被动模式？设计的困难是什么？",
+    "option_a": "这是历史偶然",
+    "option_b": "FTP的控制连接和数据连接分离设计导致在NAT/防火墙环境下的连接方向问题",
+    "option_c": "主动模式更快",
+    "option_d": "只是为了提高安全性",
+    "correct_answer": "B",
+    "explanation": "FTP的带外(out-of-band)设计（控制信令和数据在不同连接上传输）导致了NAT穿透难题。主动模式：服务器从端口20主动向客户端开放的数据端口发起TCP连接——这是服务器到客户端的入站连接，在NAT(客户端私网)或客户端防火墙环境下会失败。被动模式：客户端主动连接服务器开放的随机数据端口——但服务器端防火墙需要开放大量随机端口范围，且NAT跟踪困难。这个问题根源于FTP的协议设计——它的数据连接和控制连接分开，且数据连接方向与命令请求方向相反。HTTP就没有这个问题因为它使用带内(in-band)传输。",
+    "difficulty": "hard",
+    "layer": "应用层",
+    "chapter": "6.2",
+    "section": "文件传送协议",
+    "references": [
+      "FTP",
+      "FTP主动模式与被动模式",
+      "NAT"
+    ]
+  },
+  {
+    "text": "Telnet协议使用的NVT（网络虚拟终端）接口解决了什么问题？",
+    "option_a": "加密通信",
+    "option_b": "适配不同操作系统的终端特性差异——两端都将各自的终端特性转换为统一的NVT格式通信",
+    "option_c": "加快传输速度",
+    "option_d": "提供图形界面",
+    "correct_answer": "B",
+    "explanation": "NVT(Network Virtual Terminal)是Telnet协议的核心抽象层。不同的操作系统和终端设备使用不同的字符集、控制码和格式(如Windows换行CR+LF、Unix换行LF)。NVT定义了一个统一的虚拟终端：使用7位ASCII码+扩展码，CR+LF统一表示换行等。通信时：客户端将本地终端格式→NVT→发送给服务器，服务器从NVT→本地终端格式→显示给应用程序。NVT的精妙在于它屏蔽了全世界的终端硬件差异，让任何主机都能互相通信。这也启发了后来HTTP的请求/响应抽象层设计。",
+    "difficulty": "medium",
+    "layer": "应用层",
+    "chapter": "6.3",
+    "section": "远程终端协议 TELNET",
+    "references": [
+      "Telnet",
+      "SSH",
+      "Telnet与SSH对比"
+    ]
+  },
+  {
+    "text": "以下哪种情况使用Telnet而不是SSH是合理的？",
+    "option_a": "通过互联网远程管理服务器",
+    "option_b": "在完全隔离的可信实验网络中简化配置，或者手动测试应用层协议（如HTTP、SMTP）的连接",
+    "option_c": "传输敏感的财务管理数据",
+    "option_d": "通过公共Wi-Fi远程办公",
+    "correct_answer": "B",
+    "explanation": "Telnet不加密，因此绝不应用于任何可能被窃听的环境（互联网、公共Wi-Fi等）。但Telnet在以下场景仍然有用：(1)隔离实验网络——如实验室内部的封闭网络，所有设备直接互联，没有安全风险；(2)手动协议测试——Telnet可以连接任意TCP端口，手动输入协议命令来测试服务器（如telnet example.com 80 然后输入GET / HTTP/1.0模拟HTTP请求），这也是网络工程师常用的调试技巧。对于所有生产环境，SSH必须替代Telnet。",
+    "difficulty": "medium",
+    "layer": "应用层",
+    "chapter": "6.3",
+    "section": "远程终端协议 TELNET",
+    "references": [
+      "Telnet",
+      "SSH",
+      "Telnet与SSH对比"
+    ]
+  },
+  {
+    "text": "电子邮件系统中，MUA（邮件用户代理）和MTA（邮件传输代理）的区别是什么？",
+    "option_a": "两者相同",
+    "option_b": "MUA是用户使用的邮件客户端（如Outlook、网页邮箱），MTA是负责邮件路由和转发的服务器软件（如Postfix、Sendmail）",
+    "option_c": "MUA发送邮件，MTA接收邮件",
+    "option_d": "MUA用于加密，MTA用于解密",
+    "correct_answer": "B",
+    "explanation": "邮件系统架构包括：MUA(Mail User Agent)——用户直接交互的邮件客户端，如Outlook、Thunderbird、Roundcube、手机邮件App；MTA(Mail Transfer Agent)——邮件服务器的核心组件，负责SMTP协议的邮件接收和转发路由，如Postfix、Sendmail、Exim；MDA(Mail Delivery Agent)——将邮件投递到用户的邮箱存储，如Procmail、Dovecot的LDA组件；MRA(Mail Retrieval Agent)——提供POP3/IMAP服务让MUA取回邮件，如Dovecot。一封邮件从发件人到收件人经历的路径：发件人MUA→发件人MTA→(可能多个中间MTA)→收件人MTA→MDA→邮箱存储→MRA→收件人MUA。",
+    "difficulty": "medium",
+    "layer": "应用层",
+    "chapter": "6.5",
+    "section": "电子邮件",
+    "references": [
+      "SMTP",
+      "POP3",
+      "IMAP",
+      "邮件系统架构"
+    ]
+  },
+  {
+    "text": "SPF和DKIM这两个电子邮件安全机制的作用分别是什么？",
+    "option_a": "SPF用于加密邮件，DKIM用于解密",
+    "option_b": "SPF验证发件服务器是否被授权发送该域名的邮件（IP白名单），DKIM对邮件进行数字签名验证邮件未被篡改",
+    "option_c": "SPF用于标记垃圾邮件，DKIM用于删除病毒",
+    "option_d": "两者都是对邮件内容加密",
+    "correct_answer": "B",
+    "explanation": "SPF(Sender Policy Framework)：域名的DNS记录中声明哪些IP/服务器被授权发送该域邮件(如v=spf1 ip4:192.0.2.0/24 -all)。接收方MTA检查发件服务器IP是否在SPF记录中，判断是否为伪造发件人地址的垃圾邮件。DKIM(DomainKeys Identified Mail)：发件MTA用私钥对邮件关键部分(From, Subject, Body Hash等)进行数字签名，将签名放在邮件头DKIM-Signature中；接收方通过发件域名的DNS记录获取公钥验证签名。DKIM确保了邮件在传输过程中未被篡改且确实出自声明的域名。DMARC(DMARC=SPF+DKIM的统一策略)告诉接收方：当SPF或DKIM失败时应拒绝邮件还是标记为可疑。三者结合是目前有效的邮件反伪造体系。",
+    "difficulty": "hard",
+    "layer": "应用层",
+    "chapter": "6.5",
+    "section": "电子邮件",
+    "references": [
+      "SMTP",
+      "邮件系统架构",
+      "数字签名",
+      "DNS"
+    ]
+  },
+  {
+    "text": "DHCP协议的DORA四步交互过程是什么？",
+    "option_a": "Connect → Auth → Send → Close",
+    "option_b": "Discover（发现）→ Offer（提供）→ Request（请求）→ Acknowledge（确认）",
+    "option_c": "SYN → SYN-ACK → ACK → Data",
+    "option_d": "Request → Response → Data → Finish",
+    "correct_answer": "B",
+    "explanation": "DHCP客户端获取IP地址的DORA四步：(1)Discover——客户端广播DHCP DISCOVER报文(源IP=0.0.0.0，目的IP=255.255.255.255，UDP 67→68)寻找网络中的DHCP服务器；(2)Offer——DHCP服务器返回DHCP OFFER报文，提供建议的IP地址和配置参数（子网掩码、网关、DNS、租约时间等）；(3)Request——客户端广播DHCP REQUEST正式声明'我要用这个IP'；(4)Acknowledge——服务器返回DHCP ACK确认分配，客户端配置该IP。如果有多个DHCP服务器，客户端选择第一个收到的Offer。租约到期前(T1=租约50%时间)客户端应续约，发送单播DHCP REQUEST给服务器延长租约。",
+    "difficulty": "medium",
+    "layer": "应用层",
+    "chapter": "6.6",
+    "section": "动态主机配置协议 DHCP",
+    "references": [
+      "DHCP",
+      "DHCP DORA过程",
+      "IP地址"
+    ]
+  },
+  {
+    "text": "DHCP续约（Lease Renewal）机制是如何工作的？",
+    "option_a": "客户端每次开机都要重新DORA四步",
+    "option_b": "在租约的50%时间(T1)客户端向原DHCP服务器单播续约请求，如果成功则延长租约",
+    "option_c": "DHCP服务器主动向客户端推送新的IP",
+    "option_d": "不需要续约",
+    "correct_answer": "B",
+    "explanation": "DHCP IP租约有时间限制（如24小时）。续约过程：(1)T1(租约50%时间)——客户端向分配IP的DHCP服务器单播DHCP REQUEST尝试续约，服务器回复ACK则延长租约，续约成功；(2)T2(租约87.5%时间)——如果T1时刻服务器无响应，客户端广播DHCP REQUEST给所有DHCP服务器尝试续约；(3)租约到期——客户端必须停止使用该IP，重新开始Discover过程。这一设计平衡了：地址回收效率（确保不再使用的IP能被回收分配给其他设备）和客户端连续性（只要设备持续在线就不需要改变IP）。",
+    "difficulty": "medium",
+    "layer": "应用层",
+    "chapter": "6.6",
+    "section": "动态主机配置协议 DHCP",
+    "references": [
+      "DHCP",
+      "DHCP DORA过程"
+    ]
+  },
+  {
+    "text": "DHCP Snooping的安全机制解决什么问题？",
+    "option_a": "监控DHCP服务器的性能",
+    "option_b": "在交换机上区分可信端口和不可信端口，防止非法DHCP服务器(如Rogue DHCP)向网络分配错误IP或进行中间人攻击",
+    "option_c": "加密DHCP通信",
+    "option_d": "加快IP分配的速度",
+    "correct_answer": "B",
+    "explanation": "DHCP Snooping是交换机的二层安全特性。问题背景：任何人都可以在网络插上一个小型DHCP服务器（或恶意Wi-Fi热点），优先响应客户端DHCP请求，分配恶意DNS服务器地址（将银行域名解析到钓鱼网站），实现中间人攻击。DHCP Snooping将交换机端口分为可信（指向合法DHCP服务器的上联端口）和不可信（下联用户端口），不可信端口禁止发送DHCP OFFER/ACK应答报文，防止非法DHCP服务器。同时建立DHCP绑定表(DHCP Snooping Binding Table)记录IP-MAC-端口-租约的对应关系，用于后续DAI(Dynamic ARP Inspection)和IP Source Guard等安全机制。",
+    "difficulty": "hard",
+    "layer": "应用层",
+    "chapter": "6.6",
+    "section": "动态主机配置协议 DHCP",
+    "references": [
+      "DHCP",
+      "DHCP Snooping",
+      "DHCP DORA过程"
+    ]
+  },
+  {
+    "text": "SNMP Trap和SNMP Inform的区别是什么？",
+    "option_a": "完全相同",
+    "option_b": "Trap发送后不需要接收方确认（不可靠），Inform发送后需要接收方回复确认(Response)（可靠）",
+    "option_c": "Trap用于发送数据，Inform用于接收数据",
+    "option_d": "Inform速度比Trap慢100倍",
+    "correct_answer": "B",
+    "explanation": "SNMP Trap(SNMPv1/v2c/v3均支持)：被管设备异步向管理站发送告警信息，采用'发了就不管'(fire and forget)模式，设备不等待确认——如果UDP报文丢失，管理站永远不知道告警发生。适用于信息量大的告警（丢失个别告警可接受的场景）。SNMP Inform(SNMPv2c+支持)：在Trap基础上增加了确认机制——管理站收到Inform后必须回复一个Response PDU(确认)，如果设备在一定时间内没收到确认则重发Inform。适用于不能丢失的关键告警（如关键链路宕机、设备死机等）。Inform额外开销和实现复杂度高于Trap，因此应根据告警严重程度选择使用。",
+    "difficulty": "hard",
+    "layer": "应用层",
+    "chapter": "6.7",
+    "section": "简单网络管理协议 SNMP",
+    "references": [
+      "SNMP"
+    ]
+  },
+  {
+    "text": "SNMP的GetNext操作遍历MIB树的特点是什么？",
+    "option_a": "比Get操作慢很多",
+    "option_b": "GetNext按照字典序返回MIB树中指定OID之后的下一个OID及其值，从而可以'未知而遍历'整个MIB",
+    "option_c": "GetNext遍历需要预知所有OID",
+    "option_d": "GetNext不返回数据",
+    "correct_answer": "B",
+    "explanation": "SNMP GetNext操作是其精妙设计之一。管理站发送一个OID(如1.3.6.1.2.1.2.2.1)，被管设备返回MIB树中按照字典序紧跟在指定OID之后的下一个OID和值。这实现了'盲遍历'(Blind Walk)：管理站不需要预先知道所有OID，只需反复调用GetNext，逐步'走遍'MIB树的所有叶子节点。SNMP管理软件利用此机制自动发现设备上支持的所有MIB对象。GetBulk(SNMPv2c+)将多个GetNext打包到一个请求中批量获取大量数据，大幅提高了带宽利用率。",
+    "difficulty": "hard",
+    "layer": "应用层",
+    "chapter": "6.7",
+    "section": "简单网络管理协议 SNMP",
+    "references": [
+      "SNMP"
+    ]
+  },
+  {
+    "text": "CHAP认证协议相比PAP认证协议的主要优势是什么？",
+    "option_a": "CHAP更快",
+    "option_b": "CHAP使用三次握手的质询-响应机制，密码不以明文在网络中传输",
+    "option_c": "PAP更安全",
+    "option_d": "两者完全相同",
+    "correct_answer": "B",
+    "explanation": "PAP(Password Authentication Protocol)采用两次握手：客户端直接将用户名和密码明文发给服务器，服务器验证。缺点：密码明文传输，被窃听后攻击者可冒充合法用户——PAP已基本被淘汰。CHAP(Challenge Handshake Authentication Protocol)采用三次握手：服务器发送随机Challenge→客户端用密码+Challenge做MD5哈希得到Response→服务器用自己存储的密码+Challenge做同样哈希对比验证。密码从未在网络上传输！CHAP还支持周期重认证(重新Challenge)来防止连接劫持——通信链路建立后服务器可随时发送新的Challenge，若客户端无法正确Response则断开连接。PPP、PPPoE、iSCSI等协议使用CHAP。",
+    "difficulty": "medium",
+    "layer": "数据链路层",
+    "chapter": "3.2",
+    "section": "点对点协议 PPP",
+    "references": [
+      "PPP",
+      "PAP认证",
+      "CHAP认证"
+    ]
+  },
+  {
+    "text": "PPPoE（以太网上的点对点协议）的作用是什么？",
+    "option_a": "加速以太网传输",
+    "option_b": "在以太网上承载PPP协议，提供认证、加密和计费功能——广泛用于宽带拨号上网",
+    "option_c": "替代以太网协议",
+    "option_d": "只用于无线网络",
+    "correct_answer": "B",
+    "explanation": "PPPoE(PPP over Ethernet, RFC 2516)使ISP能在以太网上运行PPP，为每个用户提供独立的PPP会话。PPPoE过程：(1)Discovery阶段——PPPoE客户端广播PADI发现服务器，服务器回复PADO Offer，客户端请求PADR并收到PADS确认，建立会话ID；(2)PPP Session阶段——在此会话上运行标准PPP(LCP+NCP+认证)，就像拨号上网一样。PPPoE广泛用于ADSL/FTTx宽带接入：运营商通过PPPoE对每个用户进行独立认证(RADIUS)、授权带宽和计费——这正是你在家里每次上网需要'宽带拨号连接'(输入用户名密码)的原因。",
+    "difficulty": "hard",
+    "layer": "数据链路层",
+    "chapter": "3.2",
+    "section": "点对点协议 PPP",
+    "references": [
+      "PPP",
+      "PPPoE",
+      "CHAP认证",
+      "PAP认证"
+    ]
+  },
+  {
+    "text": "BitTorrent协议中的'一报还一报'(Tit-for-tat)堵塞算法是如何工作的？",
+    "option_a": "随机上传给任意Peer",
+    "option_b": "每10秒选择给自己提供数据最快的前4个Peer（unchoke），对这些Peer回报上传数据",
+    "option_c": "只下载不上传",
+    "option_d": "固定上传给所有Peer",
+    "correct_answer": "B",
+    "explanation": "BitTorrent的Tit-for-tat堵塞(Choking)算法是其激励机制的核心：(1)每个Peer定期(10秒)计算哪些邻居Peer给自己发送数据的速率最高；(2)从这些优选的Peer中选出4个进行unchoke——允许上传数据给它们；(3)同时定期(30秒)尝试optimistic unchoke——随机选择一个新Peer进行unchoke，发现更好的Peer或给新加入Peer机会。这个机制实现了'你对我好，我也对你好'的互惠互利：积极共享上传数据的Peer获取下载速率高的回报，不共享的Free-rider则得不到数据。这是P2P系统设计中的一个重要创新，解决了公共资源'公地悲剧'的问题。",
+    "difficulty": "hard",
+    "layer": "应用层",
+    "chapter": "6.9",
+    "section": "P2P 应用",
+    "references": [
+      "P2P"
+    ]
+  },
+  {
+    "text": "BitTorrent中，种子文件(torrent)不包含哪个信息？",
+    "option_a": "Tracker服务器地址",
+    "option_b": "文件的分块哈希值（用于校验下载的文件块完整性）",
+    "option_c": "文件的实际内容数据",
+    "option_d": "文件的名称、大小和分块大小",
+    "correct_answer": "C",
+    "explanation": "种子文件(.torrent)是元数据文件，不包含实际数据。它包含：(1)Tracker服务器URL（或DHT节点信息）；(2)文件名、文件大小；(3)分块(Piece)大小（通常256KB-4MB）；(4)每个分块的SHA1哈希值列表——所有Peer用此验证下载的每个数据块的完整性。在下载完成一个分块后，Peer计算其SHA1与torrent中的哈希比对，不匹配则丢弃重下。下载完成后，所有分块重组为完整文件。torrent文件配合内容分发机制，仅提供关于如何获取文件的'地图'而非文件本身。",
+    "difficulty": "medium",
+    "layer": "应用层",
+    "chapter": "6.9",
+    "section": "P2P 应用",
+    "references": [
+      "P2P"
+    ]
+  },
+  {
+    "text": "相比C/S架构，P2P架构在以下哪个方面具有理论上的优势？",
+    "option_a": "内容审查更容易",
+    "option_b": "服务能力随系统规模(n)增大而增强——更多Peer意味着更多上传带宽，而C/S架构服务器是瓶颈",
+    "option_c": "更易管理",
+    "option_d": "安全性更高",
+    "correct_answer": "B",
+    "explanation": "P2P架构的理论优势体现在可扩展性上：在C/S架构中，服务器的总上传带宽是固定的，当N个用户同时请求时，每个用户平均下载速率最多=服务器带宽/N，随N增大而线性降低。在P2P中，每个Peer在下载的同时也可上传给其他Peer，系统总上传带宽=所有Peer上传带宽之和，随N增大而增大。理论上一个足够大的P2P swarm可以达到极高的分发速率——这在BitTorrent大量用户同时下载热门文件时体现得尤其明显。当然P2P的劣势包括：内容可用性不保证（没人共享就下载不到）、激励机制设计困难、安全性/信任问题。",
+    "difficulty": "medium",
+    "layer": "应用层",
+    "chapter": "6.9",
+    "section": "P2P 应用",
+    "references": [
+      "P2P",
+      "客户-服务器"
+    ]
+  }
+]
