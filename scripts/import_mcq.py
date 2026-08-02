@@ -46,6 +46,7 @@ class MCQImporter:
                 "CREATE INDEX mcq_id_idx IF NOT EXISTS FOR (n:MCQuestion) ON (n.id)",
                 "CREATE INDEX mcq_layer_idx IF NOT EXISTS FOR (n:MCQuestion) ON (n.layer)",
                 "CREATE INDEX mcq_difficulty_idx IF NOT EXISTS FOR (n:MCQuestion) ON (n.difficulty)",
+                "CREATE INDEX mcq_chapter_idx IF NOT EXISTS FOR (n:MCQuestion) ON (n.chapter)",
             ]:
                 try:
                     session.run(idx)
@@ -83,6 +84,8 @@ class MCQImporter:
                     continue
 
                 q_id = q.get("id", f"mcq_import_{i+1}")
+                chapter = q.get("chapter", "")
+                section = q.get("section", "")
                 session.run(
                     """
                     MERGE (q:MCQuestion {id: $id})
@@ -92,13 +95,16 @@ class MCQImporter:
                         q.correct_answer = $correct_answer,
                         q.explanation = $explanation,
                         q.difficulty = $difficulty,
-                        q.layer = $layer
+                        q.layer = $layer,
+                        q.chapter = $chapter,
+                        q.section = $section
                     """,
                     id=q_id, text=q["text"],
                     option_a=q["option_a"], option_b=q["option_b"],
                     option_c=q["option_c"], option_d=q["option_d"],
                     correct_answer=q["correct_answer"], explanation=q["explanation"],
                     difficulty=q["difficulty"], layer=q["layer"],
+                    chapter=chapter, section=section,
                 )
 
                 session.run(
@@ -138,12 +144,25 @@ class MCQImporter:
 def main():
     parser = argparse.ArgumentParser(description="批量导入选择题")
     parser.add_argument("--file", default=str(project_root / "data" / "mcq_questions.json"), help="JSON 文件路径")
+    parser.add_argument("--exam", default=None, help="导入试卷的 JSON 文件路径")
     parser.add_argument("--stats", action="store_true", help="仅显示统计")
     args = parser.parse_args()
 
     importer = MCQImporter()
     try:
-        if args.stats:
+        if args.exam:
+            from src.services.exam_service import ExamService
+            from neo4j import GraphDatabase
+            import os as _os
+            uri = _os.getenv("NEO4J_URI", "bolt://localhost:7687")
+            user = _os.getenv("NEO4J_USER", "neo4j")
+            password = _os.getenv("NEO4J_PASSWORD", "")
+            driver = GraphDatabase.driver(uri, auth=(user, password))
+            exam_svc = ExamService(driver)
+            result = exam_svc.import_exam_paper(args.exam)
+            logger.info(f"试卷导入完成: {result}")
+            driver.close()
+        elif args.stats:
             importer.show_stats()
         else:
             importer.create_indexes()

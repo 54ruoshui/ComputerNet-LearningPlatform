@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>复习调度 - GraphRAG</title>
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style-new.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/quiz.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/review.css') }}">
+</head>
+<body>
+    <div class="quiz-layout">
+        <!-- 顶部栏 -->
+        <header class="quiz-topbar">
+            <div class="topbar-left">
+                <span class="topbar-title">GraphRAG 复习调度</span>
+            </div>
+            <div class="topbar-right">
+                <a href="/quiz" class="topbar-btn">
+                    <i class="fas fa-pen-to-square"></i>
+                    <span>刷题</span>
+                </a>
+                <a href="/" class="topbar-btn">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>问答</span>
+                </a>
+            </div>
+        </header>
+
+        <!-- 统计卡片 -->
+        <div class="review-stats-grid" id="statsGrid">
+            <div class="review-stat-card">
+                <div class="stat-icon" style="background:var(--accent-soft);"><i class="fas fa-brain"></i></div>
+                <div class="stat-body">
+                    <div class="stat-value" id="statTotal">-</div>
+                    <div class="stat-label">追踪知识点</div>
+                </div>
+            </div>
+            <div class="review-stat-card">
+                <div class="stat-icon" style="background:var(--green-soft);"><i class="fas fa-chart-line"></i></div>
+                <div class="stat-body">
+                    <div class="stat-value" id="statRetention">-</div>
+                    <div class="stat-label">平均保留率</div>
+                </div>
+            </div>
+            <div class="review-stat-card">
+                <div class="stat-icon" style="background:var(--red-soft);"><i class="fas fa-clock"></i></div>
+                <div class="stat-body">
+                    <div class="stat-value" id="statDue">-</div>
+                    <div class="stat-label">待复习</div>
+                </div>
+            </div>
+            <div class="review-stat-card">
+                <div class="stat-icon" style="background:var(--amber-soft);"><i class="fas fa-rotate"></i></div>
+                <div class="stat-body">
+                    <div class="stat-value" id="statToday">-</div>
+                    <div class="stat-label">今日已复习</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 复习队列 -->
+        <div class="review-section">
+            <div class="section-header">
+                <h3><i class="fas fa-list-check"></i> 复习队列</h3>
+                <select id="lookaheadSelect" onchange="loadDueReviews()">
+                    <option value="24">未来 24 小时</option>
+                    <option value="48" selected>未来 48 小时</option>
+                    <option value="168">未来 7 天</option>
+                </select>
+            </div>
+            <div id="dueList">
+                <div class="quiz-empty" id="dueEmpty">
+                    <p>加载中...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 全部复习状态 -->
+        <div class="review-section">
+            <div class="section-header">
+                <h3><i class="fas fa-table-list"></i> 全部知识点状态</h3>
+                <button class="btn-expand" onclick="toggleAllStates()">
+                    <span id="expandLabel">展开</span> <i class="fas fa-chevron-down" id="expandIcon"></i>
+                </button>
+            </div>
+            <div id="allStates" style="display:none;">
+                <div class="quiz-empty" id="statesEmpty">
+                    <p>暂无复习数据，完成一些答题后会自动记录</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 趋势图 -->
+        <div class="review-section" id="trendSection" style="display:none;">
+            <div class="section-header">
+                <h3><i class="fas fa-chart-bar"></i> 近 30 天复习趋势</h3>
+            </div>
+            <div class="trend-chart" id="trendChart"></div>
+        </div>
+
+        <!-- 质量分布 -->
+        <div class="review-section" id="qualitySection" style="display:none;">
+            <div class="section-header">
+                <h3><i class="fas fa-star-half-stroke"></i> 回忆质量分布</h3>
+            </div>
+            <div class="quality-bars" id="qualityBars"></div>
+        </div>
+
+        <!-- 手动记录复习 -->
+        <div class="review-section">
+            <div class="section-header">
+                <h3><i class="fas fa-pen"></i> 手动记录复习</h3>
+            </div>
+            <div class="manual-review-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>知识点名称</label>
+                        <input id="manualEntity" placeholder="例如：TCP、OSPF" list="entitySuggestions">
+                        <datalist id="entitySuggestions"></datalist>
+                    </div>
+                    <div class="form-group">
+                        <label>回忆质量 (0-5)</label>
+                        <select id="manualQuality">
+                            <option value="0">0 - 完全遗忘</option>
+                            <option value="1">1 - 有些印象</option>
+                            <option value="2">2 - 记得部分</option>
+                            <option value="3">3 - 基本记得</option>
+                            <option value="4" selected>4 - 回忆正确</option>
+                            <option value="5">5 - 熟练掌握</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn-submit" onclick="submitManualReview()">记录复习</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="quiz-toast" id="toast"></div>
+
+    <script src="{{ url_for('static', path='js/review-app.js') }}"></script>
+</body>
+</html>

@@ -10,13 +10,13 @@ from typing import Dict, List, Optional
 
 import structlog
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from src.exceptions import GraphRAGError, ConfigError, ConnectionError_
-from src.logging_config import setup_logging, new_request_id, request_id_var, session_id_var
+from src.logging_config import setup_logging, session_id_var
 from src.services import quiz_storage
 from src.settings import get_settings
 
@@ -36,19 +36,12 @@ app = FastAPI(title="GraphRAG 知识图谱问答系统", version="2.0")
 
 # ==================== 中间件 ====================
 
-from web.middleware import APIKeyMiddleware
+from web.middleware import APIKeyMiddleware, RequestIDMiddleware
 from web.rate_limiter import RateLimitMiddleware
 
 app.add_middleware(APIKeyMiddleware)
 app.add_middleware(RateLimitMiddleware)
-
-
-@app.middleware("http")
-async def inject_request_id(request: Request, call_next):
-    rid = new_request_id()
-    response = await call_next(request)
-    response.headers["X-Request-ID"] = rid
-    return response
+app.add_middleware(RequestIDMiddleware)
 
 
 app.mount("/static", StaticFiles(directory=static_folder), name="static")
@@ -63,6 +56,7 @@ image_generator = None
 entity_service = None
 mastery_service = None
 quiz_service = None
+exam_service = None
 
 
 # ==================== Pydantic 请求模型（带校验） ====================
@@ -97,6 +91,19 @@ class QuizAnswerRequest(BaseModel):
     selected_answer: str = Field(..., pattern="^[ABCD]$")
     session_id: Optional[str] = None
 
+
+
+class ExamSubmitRequest(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=200)
+    paper_id: str = Field(..., min_length=1, max_length=100)
+    answers: Dict[str, str] = Field(..., description="题目ID→答案的映射，如 {'q1': 'A', 'q2': 'B'}")
+
+
+class ReviewRecordRequest(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=200)
+    entity_name: str = Field(..., min_length=1, max_length=200)
+    quality: int = Field(..., ge=0, le=5, description="回忆质量 0-5")
+    event_type: str = Field(default="manual", pattern="^(quiz_correct|quiz_wrong|manual)$")
 
 
 class MCQuestionCreate(BaseModel):
@@ -215,6 +222,30 @@ def init_quiz_service():
         quiz_service = None
 
 
+def init_exam_service():
+    global exam_service
+    try:
+        from src.services.exam_service import ExamService
+        driver = None
+        if langgraph_engine and hasattr(langgraph_engine, "driver"):
+            driver = langgraph_engine.driver
+        else:
+            from neo4j import GraphDatabase
+            s = get_settings()
+            driver = GraphDatabase.driver(
+                s.neo4j_uri,
+                auth=(s.neo4j_user, s.neo4j_password),
+            )
+        tracker = None
+        if mastery_service and mastery_service.available:
+            tracker = mastery_service._tracker
+        exam_service = ExamService(driver, tracker)
+        logger.info("ExamService 初始化完成")
+    except Exception as e:
+        logger.error("ExamService 初始化失败", error=str(e))
+        exam_service = None
+
+
 def _require_engine():
     if not langgraph_engine:
         raise HTTPException(status_code=503, detail="LangGraph 引擎未初始化，请检查 Neo4j 和 API 配置")
@@ -234,6 +265,7 @@ def on_startup():
         init_image_generator()
         init_mastery_tracker()
         init_quiz_service()
+        init_exam_service()
     else:
         logger.info("快速启动模式：系统将在首次查询时初始化")
 
@@ -259,7 +291,7 @@ async def index(request: Request):
 
 @app.get("/favicon.ico")
 async def favicon():
-    return JSONResponse(content={}, status_code=204)
+    return Response(status_code=204)
 
 
 # ==================== 核心查询 API ====================
@@ -516,10 +548,16 @@ async def quiz_page(request: Request):
     return templates.TemplateResponse(request, "quiz.html")
 
 
+@app.get("/review", response_class=HTMLResponse)
+async def review_page(request: Request):
+    return templates.TemplateResponse(request, "review.html")
+
+
 @app.get("/api/quiz/questions")
 async def get_quiz_questions(
     layer: Optional[str] = None,
     difficulty: Optional[str] = None,
+    chapter: Optional[str] = None,
     limit: int = 20,
 ):
     global quiz_service
@@ -529,9 +567,26 @@ async def get_quiz_questions(
         if not quiz_service:
             raise HTTPException(status_code=503, detail="Quiz 服务未初始化")
     try:
-        return quiz_service.get_questions(layer=layer, difficulty=difficulty, limit=limit)
+        return quiz_service.get_questions(
+            layer=layer, difficulty=difficulty, chapter=chapter, limit=limit
+        )
     except Exception as e:
         logger.error("获取测验题目失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/quiz/chapters")
+async def get_chapter_structure():
+    global quiz_service
+    if not quiz_service:
+        if langgraph_engine:
+            init_quiz_service()
+        if not quiz_service:
+            raise HTTPException(status_code=503, detail="Quiz 服务未初始化")
+    try:
+        return quiz_service.get_chapter_structure()
+    except Exception as e:
+        logger.error("获取章节结构失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -550,11 +605,19 @@ async def submit_quiz_answer(req: QuizAnswerRequest):
 
         is_correct = req.selected_answer == result["correct_answer"]
 
-        # 联动掌握度追踪：根据答题结果更新相关实体的掌握状态
+        # 联动掌握度追踪 + 复习调度：根据答题结果更新状态
         if req.session_id and mastery_service and mastery_service.available:
             refs = result.get("references", [])
+            quality = 4 if is_correct else 1
+            event_type = "quiz_correct" if is_correct else "quiz_wrong"
             for entity_name in refs:
                 mastery_service.set_mastery(req.session_id, entity_name, is_correct)
+                try:
+                    mastery_service.record_review(
+                        req.session_id, entity_name, quality, event_type
+                    )
+                except Exception:
+                    pass  # 复习记录失败不影响答题流程
 
         return {
             "correct": is_correct,
@@ -596,6 +659,209 @@ async def create_quiz_question(req: MCQuestionCreate):
         return {"success": True, "question_id": q_id}
     except Exception as e:
         logger.error("创建题目失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 考试试卷 API ====================
+
+@app.get("/api/exam/papers")
+async def get_exam_papers():
+    global exam_service
+    if not exam_service:
+        if langgraph_engine:
+            init_exam_service()
+        if not exam_service:
+            raise HTTPException(status_code=503, detail="Exam 服务未初始化")
+    try:
+        return exam_service.get_exam_papers()
+    except Exception as e:
+        logger.error("获取试卷列表失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/exam/papers/{paper_id}")
+async def get_exam_paper(paper_id: str):
+    global exam_service
+    if not exam_service:
+        if langgraph_engine:
+            init_exam_service()
+        if not exam_service:
+            raise HTTPException(status_code=503, detail="Exam 服务未初始化")
+    try:
+        paper = exam_service.get_exam_paper(paper_id)
+        if not paper:
+            raise HTTPException(status_code=404, detail="试卷不存在")
+        return paper
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("获取试卷详情失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/exam/papers/import")
+async def import_exam_paper(request: Request):
+    global exam_service
+    if not exam_service:
+        if langgraph_engine:
+            init_exam_service()
+        if not exam_service:
+            raise HTTPException(status_code=503, detail="Exam 服务未初始化")
+    try:
+        data = await request.json()
+        paper_id = exam_service.create_exam_paper(data)
+        return {"success": True, "paper_id": paper_id}
+    except Exception as e:
+        logger.error("导入试卷失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/exam/submit")
+async def submit_exam(req: ExamSubmitRequest):
+    global exam_service
+    if not exam_service:
+        if langgraph_engine:
+            init_exam_service()
+        if not exam_service:
+            raise HTTPException(status_code=503, detail="Exam 服务未初始化")
+    try:
+        result = exam_service.submit_exam(
+            req.session_id, req.paper_id, req.answers
+        )
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        # 附加 LLM 分析
+        wrong_details = [d for d in result.get("details", []) if not d.get("correct")]
+        analysis = exam_service.analyze_weaknesses(
+            session_id=req.session_id, wrong_details=wrong_details
+        )
+        result["analysis"] = analysis
+
+        # 附加错误统计
+        if req.session_id:
+            result["error_stats"] = exam_service.get_exam_error_stats(req.session_id)
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("提交试卷失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/exam/analysis/{session_id}")
+async def get_exam_analysis(session_id: str):
+    global exam_service
+    if not exam_service:
+        if langgraph_engine:
+            init_exam_service()
+        if not exam_service:
+            raise HTTPException(status_code=503, detail="Exam 服务未初始化")
+    try:
+        analysis = exam_service.analyze_weaknesses(session_id)
+        return analysis
+    except Exception as e:
+        logger.error("获取分析失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/exam/recommendations/{session_id}")
+async def get_exam_recommendations(session_id: str, limit: int = 20):
+    global exam_service
+    if not exam_service:
+        if langgraph_engine:
+            init_exam_service()
+        if not exam_service:
+            raise HTTPException(status_code=503, detail="Exam 服务未初始化")
+    try:
+        return exam_service.get_recommendations(session_id, limit=limit)
+    except Exception as e:
+        logger.error("获取推荐失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/exam/history/{session_id}")
+async def get_exam_history(session_id: str):
+    global exam_service
+    if not exam_service:
+        if langgraph_engine:
+            init_exam_service()
+        if not exam_service:
+            raise HTTPException(status_code=503, detail="Exam 服务未初始化")
+    try:
+        return exam_service.get_exam_history(session_id)
+    except Exception as e:
+        logger.error("获取考试历史失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/exam/result/{result_id}")
+async def get_exam_result(result_id: int):
+    global exam_service
+    if not exam_service:
+        if langgraph_engine:
+            init_exam_service()
+        if not exam_service:
+            raise HTTPException(status_code=503, detail="Exam 服务未初始化")
+    try:
+        result = exam_service.get_exam_result(result_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="考试记录不存在")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("获取考试结果失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 复习调度 API ====================
+
+@app.get("/api/review/state/{session_id}")
+async def get_review_state(session_id: str):
+    if not mastery_service or not mastery_service.available:
+        raise HTTPException(status_code=503, detail="复习调度器未初始化")
+    try:
+        return mastery_service.get_review_state(session_id)
+    except Exception as e:
+        logger.error("获取复习状态失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/review/due/{session_id}")
+async def get_due_reviews(session_id: str, lookahead: float = 48):
+    if not mastery_service or not mastery_service.available:
+        raise HTTPException(status_code=503, detail="复习调度器未初始化")
+    try:
+        return mastery_service.get_due_reviews(session_id, lookahead)
+    except Exception as e:
+        logger.error("获取到期复习失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/review/record")
+async def record_review(req: ReviewRecordRequest):
+    if not mastery_service or not mastery_service.available:
+        raise HTTPException(status_code=503, detail="复习调度器未初始化")
+    try:
+        result = mastery_service.record_review(
+            req.session_id, req.entity_name, req.quality, req.event_type
+        )
+        return result
+    except Exception as e:
+        logger.error("记录复习失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/review/stats/{session_id}")
+async def get_review_stats(session_id: str):
+    if not mastery_service or not mastery_service.available:
+        raise HTTPException(status_code=503, detail="复习调度器未初始化")
+    try:
+        return mastery_service.get_review_stats(session_id)
+    except Exception as e:
+        logger.error("获取复习统计失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
