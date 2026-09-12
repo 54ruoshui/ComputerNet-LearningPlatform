@@ -57,6 +57,7 @@ entity_service = None
 mastery_service = None
 quiz_service = None
 exam_service = None
+dashboard_service = None
 
 
 # ==================== Pydantic 请求模型（带校验） ====================
@@ -246,6 +247,30 @@ def init_exam_service():
         exam_service = None
 
 
+def init_dashboard_service():
+    global dashboard_service
+    try:
+        from src.services.dashboard_service import DashboardService
+        driver = None
+        if langgraph_engine and hasattr(langgraph_engine, "driver"):
+            driver = langgraph_engine.driver
+        else:
+            from neo4j import GraphDatabase
+            s = get_settings()
+            driver = GraphDatabase.driver(
+                s.neo4j_uri,
+                auth=(s.neo4j_user, s.neo4j_password),
+            )
+        tracker = None
+        if mastery_service and mastery_service.available:
+            tracker = mastery_service._tracker
+        dashboard_service = DashboardService(driver, tracker, quiz_service)
+        logger.info("DashboardService 初始化完成")
+    except Exception as e:
+        logger.error("DashboardService 初始化失败", error=str(e))
+        dashboard_service = None
+
+
 def _require_engine():
     if not langgraph_engine:
         raise HTTPException(status_code=503, detail="LangGraph 引擎未初始化，请检查 Neo4j 和 API 配置")
@@ -266,6 +291,7 @@ def on_startup():
         init_mastery_tracker()
         init_quiz_service()
         init_exam_service()
+        init_dashboard_service()
     else:
         logger.info("快速启动模式：系统将在首次查询时初始化")
 
@@ -553,6 +579,11 @@ async def review_page(request: Request):
     return templates.TemplateResponse(request, "review.html")
 
 
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard_page(request: Request):
+    return templates.TemplateResponse(request, "dashboard.html")
+
+
 @app.get("/api/quiz/questions")
 async def get_quiz_questions(
     layer: Optional[str] = None,
@@ -605,16 +636,16 @@ async def submit_quiz_answer(req: QuizAnswerRequest):
 
         is_correct = req.selected_answer == result["correct_answer"]
 
-        # 联动掌握度追踪 + 复习调度：根据答题结果更新状态
+        # 联动复习调度：答题结果驱动遗忘曲线更新，掌握度由曲线状态自动判定
         if req.session_id and mastery_service and mastery_service.available:
             refs = result.get("references", [])
             quality = 4 if is_correct else 1
             event_type = "quiz_correct" if is_correct else "quiz_wrong"
+            chapter = result.get("chapter", "")
             for entity_name in refs:
-                mastery_service.set_mastery(req.session_id, entity_name, is_correct)
                 try:
                     mastery_service.record_review(
-                        req.session_id, entity_name, quality, event_type
+                        req.session_id, entity_name, quality, event_type, chapter
                     )
                 except Exception:
                     pass  # 复习记录失败不影响答题流程
@@ -830,11 +861,11 @@ async def get_review_state(session_id: str):
 
 
 @app.get("/api/review/due/{session_id}")
-async def get_due_reviews(session_id: str, lookahead: float = 48):
+async def get_due_reviews(session_id: str, lookahead: float = 48, limit: int = 50):
     if not mastery_service or not mastery_service.available:
         raise HTTPException(status_code=503, detail="复习调度器未初始化")
     try:
-        return mastery_service.get_due_reviews(session_id, lookahead)
+        return mastery_service.get_due_reviews(session_id, lookahead, limit)
     except Exception as e:
         logger.error("获取到期复习失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
@@ -862,6 +893,37 @@ async def get_review_stats(session_id: str):
         return mastery_service.get_review_stats(session_id)
     except Exception as e:
         logger.error("获取复习统计失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 学习仪表盘 API ====================
+
+@app.get("/api/dashboard/overview/{session_id}")
+async def get_dashboard_overview(session_id: str):
+    global dashboard_service
+    if not dashboard_service:
+        init_dashboard_service()
+    if not dashboard_service:
+        raise HTTPException(status_code=503, detail="仪表盘服务未初始化")
+    try:
+        return dashboard_service.get_overview(session_id)
+    except Exception as e:
+        logger.error("获取仪表盘数据失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/dashboard/report/{session_id}")
+async def generate_dashboard_report(session_id: str):
+    global dashboard_service
+    if not dashboard_service:
+        init_dashboard_service()
+    if not dashboard_service:
+        raise HTTPException(status_code=503, detail="仪表盘服务未初始化")
+    try:
+        report = dashboard_service.generate_report(session_id)
+        return {"report": report}
+    except Exception as e:
+        logger.error("生成学习报告失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 

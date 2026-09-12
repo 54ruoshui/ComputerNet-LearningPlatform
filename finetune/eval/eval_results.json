@@ -1,0 +1,731 @@
+{
+ "base": {
+  "accuracy": 0.8811881188118812,
+  "by_layer": {
+   "传输层": 0.8333333333333334,
+   "应用层": 1.0,
+   "数据链路层": 0.8571428571428571,
+   "物理层": 0.8571428571428571,
+   "网络层": 0.8695652173913043
+  }
+ },
+ "sft": {
+  "accuracy": 0.8910891089108911,
+  "by_layer": {
+   "传输层": 0.875,
+   "应用层": 1.0,
+   "数据链路层": 0.8571428571428571,
+   "物理层": 0.8571428571428571,
+   "网络层": 0.8695652173913043
+  }
+ },
+ "detail": [
+  {
+   "id": "mcq_ac1e83b4",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_0d414421",
+   "answer": "B",
+   "base": "C",
+   "sft": "B",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_5d012e3a",
+   "answer": "D",
+   "base": "A",
+   "sft": "A",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_9b709d58",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_babebaa0",
+   "answer": "D",
+   "base": "A",
+   "sft": "C",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_bbcf2e6a",
+   "answer": "C",
+   "base": "C",
+   "sft": "C",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_fb3b36f7",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_4a74849b",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_42c47b41",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_1271437f",
+   "answer": "D",
+   "base": "B",
+   "sft": "B",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_36bee14b",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_import_69",
+   "answer": "C",
+   "base": "C",
+   "sft": "C",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_import_72",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_import_75",
+   "answer": "C",
+   "base": "C",
+   "sft": "C",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_import_78",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_import_81",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_import_84",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_import_107",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_import_145",
+   "answer": "C",
+   "base": "C",
+   "sft": "C",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_import_148",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_import_151",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_import_154",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_import_157",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_import_185",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "传输层"
+  },
+  {
+   "id": "mcq_2cc55991",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_6bc4ab86",
+   "answer": "C",
+   "base": "C",
+   "sft": "C",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_cf9323fd",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_ebed4a4a",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_4dffc225",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_import_88",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_import_91",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_import_94",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_import_97",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_import_100",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_import_103",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_import_106",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_import_161",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_import_164",
+   "answer": "C",
+   "base": "C",
+   "sft": "C",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_import_167",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_import_170",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_import_173",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_import_178",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_import_190",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "应用层"
+  },
+  {
+   "id": "mcq_105d2486",
+   "answer": "D",
+   "base": "C",
+   "sft": "C",
+   "layer": "数据链路层"
+  },
+  {
+   "id": "mcq_1c65474c",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "数据链路层"
+  },
+  {
+   "id": "mcq_e5425b33",
+   "answer": "D",
+   "base": "C",
+   "sft": "C",
+   "layer": "数据链路层"
+  },
+  {
+   "id": "mcq_24e8adf0",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "数据链路层"
+  },
+  {
+   "id": "mcq_caf8ddef",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "数据链路层"
+  },
+  {
+   "id": "mcq_1d690a8f",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "数据链路层"
+  },
+  {
+   "id": "mcq_fe75cdbd",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "数据链路层"
+  },
+  {
+   "id": "mcq_import_37",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "数据链路层"
+  },
+  {
+   "id": "mcq_import_40",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "数据链路层"
+  },
+  {
+   "id": "mcq_import_43",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "数据链路层"
+  },
+  {
+   "id": "mcq_import_123",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "数据链路层"
+  },
+  {
+   "id": "mcq_import_126",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "数据链路层"
+  },
+  {
+   "id": "mcq_import_129",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "数据链路层"
+  },
+  {
+   "id": "mcq_import_176",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "数据链路层"
+  },
+  {
+   "id": "mcq_import_1",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_import_4",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_import_7",
+   "answer": "C",
+   "base": "C",
+   "sft": "C",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_import_10",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_import_13",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_import_16",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_import_19",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_import_22",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_import_25",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_import_28",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_d88ea840",
+   "answer": "D",
+   "base": "C",
+   "sft": "B",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_dcd38952",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_a5200dec",
+   "answer": "C",
+   "base": "C",
+   "sft": "C",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_6ed341e1",
+   "answer": "C",
+   "base": "B",
+   "sft": "B",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_f1c4730d",
+   "answer": "D",
+   "base": "B",
+   "sft": "B",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_import_31",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_import_34",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_import_113",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_import_116",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_import_119",
+   "answer": "C",
+   "base": "C",
+   "sft": "C",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_import_122",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "物理层"
+  },
+  {
+   "id": "mcq_36bbafe7",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_6e3b50bc",
+   "answer": "D",
+   "base": "B",
+   "sft": "C",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_9a353ed0",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_e3e4f26f",
+   "answer": "D",
+   "base": "C",
+   "sft": "D",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_6387ecf6",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_77113af4",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_2e342cc7",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_56842ba5",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_6e9b5eed",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_2b5efd1c",
+   "answer": "A",
+   "base": "C",
+   "sft": "B",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_9279fc06",
+   "answer": "D",
+   "base": "D",
+   "sft": "B",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_import_46",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_import_49",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_import_52",
+   "answer": "C",
+   "base": "C",
+   "sft": "C",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_import_55",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_import_58",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_import_61",
+   "answer": "D",
+   "base": "D",
+   "sft": "D",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_import_64",
+   "answer": "C",
+   "base": "C",
+   "sft": "C",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_import_67",
+   "answer": "C",
+   "base": "C",
+   "sft": "C",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_import_133",
+   "answer": "A",
+   "base": "A",
+   "sft": "A",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_import_136",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_import_139",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "网络层"
+  },
+  {
+   "id": "mcq_import_142",
+   "answer": "B",
+   "base": "B",
+   "sft": "B",
+   "layer": "网络层"
+  }
+ ]
+}

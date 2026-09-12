@@ -1,0 +1,420 @@
+/* ==================== 学习仪表盘 ==================== */
+
+/* 统计卡片（5 列） */
+.dash-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    margin-bottom: 18px;
+}
+@media (max-width: 900px) {
+    .dash-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* 双列布局 */
+.dash-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    align-items: start;
+}
+@media (max-width: 900px) {
+    .dash-grid-2 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ==================== 章节热力图 ==================== */
+.heatmap-legend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-3);
+}
+.legend-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+}
+.heatmap-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 5px;
+}
+@media (max-width: 700px) {
+    .heatmap-grid {
+        grid-template-columns: repeat(5, 1fr);
+    }
+}
+.heatmap-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    aspect-ratio: 1.6;
+    border-radius: 6px;
+    background: var(--bg-3);
+    cursor: default;
+    padding: 4px 2px;
+    transition: transform 0.12s ease;
+}
+.heatmap-cell:hover {
+    transform: scale(1.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.heatmap-cell .cell-chapter {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-1);
+}
+.heatmap-cell .cell-rate {
+    font-size: 10px;
+    color: var(--text-2);
+}
+.heatmap-cell.no-data .cell-chapter {
+    color: var(--text-3);
+}
+
+/* ==================== 各层掌握率进度条 ==================== */
+.layer-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.layer-bar-row {
+    display: grid;
+    grid-template-columns: 84px 1fr 110px;
+    align-items: center;
+    gap: 10px;
+}
+.layer-bar-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.layer-bar-track {
+    height: 12px;
+    border-radius: 6px;
+    background: var(--bg-3);
+    overflow: hidden;
+}
+.layer-bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--accent), var(--green));
+    transition: width 0.4s ease;
+}
+.layer-bar-meta {
+    font-size: 11px;
+    color: var(--text-3);
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* ==================== 复习日历 ==================== */
+.calendar-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-3);
+    text-align: center;
+}
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+.calendar-cell {
+    aspect-ratio: 1;
+    border-radius: 5px;
+    background: var(--bg-3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: var(--text-2);
+    cursor: default;
+    transition: transform 0.12s ease;
+}
+.calendar-cell:hover {
+    transform: scale(1.12);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.calendar-cell.future {
+    background: transparent;
+    border: 1px dashed var(--border-3);
+    color: var(--text-4);
+}
+.calendar-legend {
+    font-size: 11px;
+    color: var(--text-3);
+    text-align: center;
+}
+
+/* ==================== 考试正确率趋势 SVG ==================== */
+.trend-svg-wrap svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+.trend-svg-wrap .axis-text {
+    font-size: 11px;
+    fill: var(--text-3);
+}
+.trend-svg-wrap .grid-line {
+    stroke: var(--border-2);
+    stroke-width: 1;
+}
+.trend-svg-wrap .trend-line {
+    stroke: var(--accent);
+    stroke-width: 2.5;
+    fill: none;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+.trend-svg-wrap .trend-point {
+    fill: var(--accent);
+}
+.trend-svg-wrap .trend-label {
+    font-size: 10px;
+    fill: var(--text-2);
+}
+
+/* ==================== 薄弱点表格 ==================== */
+.weak-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.weak-table th {
+    text-align: left;
+    padding: 8px 10px;
+    color: var(--text-3);
+    font-weight: 500;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border-2);
+}
+.weak-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-1);
+    color: var(--text-2);
+}
+.weak-cat-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+.weak-cat-badge.difficulty {
+    background: var(--amber-soft);
+    color: var(--amber);
+}
+.weak-cat-badge.chapter {
+    background: var(--green-soft);
+    color: #1d9c5d;
+}
+.weak-pct-track {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--bg-3);
+    overflow: hidden;
+    min-width: 60px;
+}
+.weak-pct-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--red);
+}
+
+/* ==================== 活动时间线 ==================== */
+.timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 420px;
+    overflow-y: auto;
+}
+.timeline-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+}
+.timeline-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+.timeline-icon.review {
+    background: var(--green-soft);
+    color: var(--green);
+}
+.timeline-icon.exam {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+.timeline-body {
+    flex: 1;
+    min-width: 0;
+}
+.timeline-detail {
+    font-size: 13px;
+    color: var(--text-1);
+    word-break: break-all;
+}
+.timeline-time {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 2px;
+}
+
+/* ==================== 报告区 ==================== */
+.report-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+.report-hint {
+    font-size: 12px;
+    color: var(--text-3);
+}
+
+/* 报告弹窗 */
+.report-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 18, 30, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+.report-modal-card {
+    background: var(--bg-0);
+    border-radius: 14px;
+    width: min(760px, 100%);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+.report-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-2);
+}
+.report-modal-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--text-1);
+}
+.report-modal-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: var(--text-3);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+.report-modal-close:hover {
+    background: var(--bg-2);
+    color: var(--text-1);
+}
+.report-modal-body {
+    padding: 18px 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+.report-modal-body pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: 'JetBrains Mono', 'Noto Sans SC', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-1);
+}
+.report-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--border-2);
+}
+.btn-secondary {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border-3);
+    background: var(--bg-0);
+    color: var(--text-2);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.btn-secondary:hover {
+    background: var(--bg-2);
+}
+
+/* ==================== 打印样式 ==================== */
+.print-report {
+    display: none;
+}
+@media print {
+    .quiz-topbar,
+    .report-actions .btn-submit,
+    .report-hint,
+    .report-modal-overlay,
+    .quiz-toast {
+        display: none !important;
+    }
+    .print-report {
+        display: block;
+        padding: 16px;
+        margin-bottom: 16px;
+        border: 1px solid var(--border-2);
+        border-radius: 8px;
+    }
+    .print-report pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 12px;
+        line-height: 1.6;
+    }
+    .timeline {
+        max-height: none;
+        overflow: visible;
+    }
+    .review-section {
+        break-inside: avoid;
+    }
+}

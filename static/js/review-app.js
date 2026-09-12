@@ -47,6 +47,18 @@
             $("statDue").textContent = stats.due_now || 0;
             $("statToday").textContent = stats.today_reviews || 0;
 
+            // 回忆成功率（近 7 天优先）+ 趋势
+            const sr = stats.success_rate_7d != null
+                ? stats.success_rate_7d
+                : stats.success_rate || 0;
+            $("statSuccess").textContent = stats.total_reviews > 0
+                ? Math.round(sr * 100) + "%" : "-";
+            renderSuccessTrend(stats.success_rate_7d, stats.success_rate_prev_7d);
+
+            // 平均记忆半衰期
+            $("statHalfLife").textContent = stats.total_entities > 0
+                ? (stats.avg_half_life_days || 0) + " 天" : "-";
+
             // 趋势图
             if (stats.daily_trend && stats.daily_trend.length > 0) {
                 renderTrend(stats.daily_trend);
@@ -58,8 +70,40 @@
                 renderQualityDist(stats.quality_distribution, stats.total_reviews);
                 $("qualitySection").style.display = "block";
             }
+
+            // 记忆强度分布
+            if (stats.retention_distribution) {
+                const total = Object.values(stats.retention_distribution).reduce((a, b) => a + b, 0);
+                if (total > 0) {
+                    renderRetentionDist(stats.retention_distribution, total);
+                    $("retentionDistSection").style.display = "block";
+                }
+            }
+
+            // 未来 7 天复习负荷
+            if (stats.forecast_7d && stats.forecast_7d.length > 0) {
+                renderForecast(stats.forecast_7d);
+                $("forecastSection").style.display = "block";
+            }
         } catch (e) {
             console.error("加载统计失败:", e);
+        }
+    }
+
+    function renderSuccessTrend(cur, prev) {
+        const el = $("statSuccessTrend");
+        if (cur == null || prev == null || prev === 0) {
+            el.style.display = "none";
+            return;
+        }
+        const deltaPt = ((cur - prev) * 100).toFixed(1);
+        el.style.display = "block";
+        if (deltaPt >= 0) {
+            el.className = "stat-trend up";
+            el.textContent = "▲ +" + deltaPt + "pt vs 前 7 天";
+        } else {
+            el.className = "stat-trend down";
+            el.textContent = "▼ " + deltaPt + "pt vs 前 7 天";
         }
     }
 
@@ -91,6 +135,41 @@
             </div>`;
         }
         $("qualityBars").innerHTML = html;
+    }
+
+    function renderRetentionDist(dist, total) {
+        const buckets = [
+            { label: "牢固", color: "#34c77b" },
+            { label: "正常", color: "#3b82f6" },
+            { label: "薄弱", color: "#f59e0b" },
+            { label: "需复习", color: "#ef4444" },
+        ];
+        let html = "";
+        for (const b of buckets) {
+            const cnt = dist[b.label] || 0;
+            const pct = total > 0 ? Math.round((cnt / total) * 100) : 0;
+            html += `<div class="quality-row">
+                <span class="quality-label">${b.label}</span>
+                <div class="quality-bar-wrap">
+                    <div class="quality-bar-fill" style="width:${Math.max(pct, 2)}%;background:${b.color};">${pct > 8 ? cnt : ""}</div>
+                </div>
+            </div>`;
+        }
+        $("retentionDistBars").innerHTML = html;
+    }
+
+    function renderForecast(forecast) {
+        const maxCount = Math.max(1, ...forecast.map((f) => f.count));
+        let html = "";
+        for (const f of forecast) {
+            const h = Math.max(2, Math.round((f.count / maxCount) * 110));
+            const dateLabel = f.is_today ? "今天" : f.date.slice(5); // MM-DD
+            html += `<div class="trend-bar-wrap">
+                <div class="trend-bar" style="height:${h}px;${f.is_today ? "background:var(--accent);" : ""}" title="${f.date}: ${f.count} 个待复习"></div>
+                <span class="trend-date">${dateLabel}</span>
+            </div>`;
+        }
+        $("forecastChart").innerHTML = html;
     }
 
     // --- 加载到期复习 ---
@@ -159,13 +238,20 @@
     window.quickReview = async function (entityName, quality) {
         const sid = getSessionId();
         try {
-            await apiPost("/api/review/record", {
+            const res = await apiPost("/api/review/record", {
                 session_id: sid,
                 entity_name: entityName,
                 quality: quality,
                 event_type: "manual",
             });
-            showToast(`已记录: ${entityName} (Q${quality})`, "success");
+            let msg = `已记录: ${entityName} (Q${quality})`;
+            if (res && res.next_review_at) {
+                const next = new Date(res.next_review_at).toLocaleString("zh-CN", {
+                    month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+                });
+                msg += `，下次复习 ${next}`;
+            }
+            showToast(msg, "success");
             await loadDueReviews();
             await loadStats();
         } catch (e) {

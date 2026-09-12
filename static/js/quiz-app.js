@@ -307,9 +307,8 @@
         const q = questions[currentIdx];
 
         try {
-            const sessionId = localStorage.getItem('graphrag_session_id');
-            const body = { question_id: q.id, selected_answer: selectedAnswer };
-            if (sessionId) body.session_id = sessionId;
+            const sessionId = localStorage.getItem('graphrag_session_id') || 'default';
+            const body = { question_id: q.id, selected_answer: selectedAnswer, session_id: sessionId };
             const result = await apiPost("/api/quiz/answer", body);
 
             document.querySelectorAll(".option-btn").forEach(btn => {

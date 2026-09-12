@@ -11,7 +11,14 @@ from typing import Dict, List, Optional
 
 import structlog
 
-from src.services.review_scheduler import ReviewScheduler, calculate_retention
+from src.services.review_scheduler import (
+    MASTERY_HALF_LIFE_THRESHOLD,
+    MASTERY_MIN_QUALITY,
+    MASTERY_MIN_REVIEWS,
+    ReviewScheduler,
+    calculate_retention,
+    get_retention_label,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -58,6 +65,17 @@ class MasteryTracker:
                     recorded_at  TEXT NOT NULL DEFAULT (datetime('now'))
                 )
             """)
+            # migration: add learning-effect evaluation columns if missing
+            for ddl in (
+                "ALTER TABLE review_events ADD COLUMN predicted_retention REAL",
+                "ALTER TABLE review_events ADD COLUMN half_life_after REAL",
+                "ALTER TABLE review_events ADD COLUMN elapsed_hours REAL",
+                "ALTER TABLE review_events ADD COLUMN chapter TEXT NOT NULL DEFAULT ''",
+            ):
+                try:
+                    self.conn.execute(ddl)
+                except Exception:
+                    pass
             self.conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_review_events_student
                 ON review_events(student_id, recorded_at)
@@ -160,6 +178,7 @@ class MasteryTracker:
         entity_name: str,
         quality: int,
         event_type: str = "manual",
+        chapter: str = "",
     ) -> dict:
         """记录一次复习事件，更新复习状态
 
@@ -168,6 +187,7 @@ class MasteryTracker:
             entity_name: 知识点实体名
             quality: 回忆质量 0-5
             event_type: 'quiz_correct' | 'quiz_wrong' | 'manual'
+            chapter: 章节编码（如 '1.7'），用于章节正确率统计
 
         Returns:
             更新后的复习状态
@@ -176,15 +196,23 @@ class MasteryTracker:
         with self._lock:
             # 读取现有状态
             row = self.conn.execute(
-                """SELECT review_count, half_life, ease_factor
+                """SELECT review_count, half_life, ease_factor, last_review_at
                    FROM review_state WHERE student_id = ? AND entity_name = ?""",
                 (student_id, entity_name),
             ).fetchone()
 
             if row:
-                review_count, half_life, ease_factor = row
+                review_count, half_life, ease_factor, last_at = row
             else:
-                review_count, half_life, ease_factor = 0, 24.0, 2.5
+                review_count, half_life, ease_factor, last_at = 0, 24.0, 2.5, None
+
+            # 距上次复习的时长（间隔效应输入）
+            elapsed_hours = None
+            if last_at:
+                try:
+                    elapsed_hours = (now - datetime.fromisoformat(last_at)).total_seconds() / 3600
+                except (ValueError, TypeError):
+                    elapsed_hours = None
 
             # 计算新状态
             new_state = self._scheduler.process_review(
@@ -192,6 +220,7 @@ class MasteryTracker:
                 review_count=review_count,
                 half_life=half_life,
                 ease_factor=ease_factor,
+                elapsed_hours=elapsed_hours,
                 now=now,
             )
 
@@ -218,12 +247,46 @@ class MasteryTracker:
                 ),
             )
 
-            # 记录事件
+            # 记录事件（含预测保留率/新半衰期/章节，用于学习效果评估）
             self.conn.execute(
-                """INSERT INTO review_events (student_id, entity_name, event_type, quality)
-                   VALUES (?, ?, ?, ?)""",
-                (student_id, entity_name, event_type, quality),
+                """INSERT INTO review_events
+                   (student_id, entity_name, event_type, quality,
+                    predicted_retention, half_life_after, elapsed_hours, chapter)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    student_id, entity_name, event_type, quality,
+                    new_state["retention_at_review"],
+                    new_state["half_life"],
+                    round(elapsed_hours, 2) if elapsed_hours is not None else None,
+                    chapter or "",
+                ),
             )
+
+            # 曲线驱动的自动掌握判定
+            m_row = self.conn.execute(
+                "SELECT mastered FROM mastery WHERE student_id = ? AND entity_name = ?",
+                (student_id, entity_name),
+            ).fetchone()
+            prev_mastered = bool(m_row[0]) if m_row else False
+            if quality < 3:
+                new_mastered = False
+            elif (
+                new_state["review_count"] >= MASTERY_MIN_REVIEWS
+                and new_state["half_life"] >= MASTERY_HALF_LIFE_THRESHOLD
+                and quality >= MASTERY_MIN_QUALITY
+            ):
+                new_mastered = True
+            else:
+                new_mastered = prev_mastered
+
+            if m_row is None or new_mastered != prev_mastered:
+                self.conn.execute(
+                    """INSERT INTO mastery (student_id, entity_name, mastered, updated_at)
+                       VALUES (?, ?, ?, datetime('now'))
+                       ON CONFLICT(student_id, entity_name)
+                       DO UPDATE SET mastered = excluded.mastered, updated_at = datetime('now')""",
+                    (student_id, entity_name, 1 if new_mastered else 0),
+                )
 
             self.conn.commit()
 
@@ -242,6 +305,7 @@ class MasteryTracker:
             "ease_factor": new_state["ease_factor"],
             "next_review_at": new_state["next_review_at"],
             "next_interval_hours": new_state["next_interval"],
+            "mastered": new_mastered,
             **current,
         }
 
@@ -278,12 +342,15 @@ class MasteryTracker:
             })
         return result
 
-    def get_due_reviews(self, student_id: str, lookahead_hours: float = 48) -> List[dict]:
+    def get_due_reviews(
+        self, student_id: str, lookahead_hours: float = 48, limit: int = 50
+    ) -> List[dict]:
         """获取到期或即将到期的复习项，按紧急度降序排列
 
         Args:
             student_id: 学生 ID
             lookahead_hours: 向前看多少小时（默认 48 小时内的都算即将到期）
+            limit: 最多返回条数
         """
         now = datetime.now()
         cutoff = (now + timedelta(hours=lookahead_hours)).isoformat()
@@ -293,8 +360,9 @@ class MasteryTracker:
                           half_life, ease_factor
                    FROM review_state
                    WHERE student_id = ? AND next_review_at <= ?
-                   ORDER BY next_review_at ASC""",
-                (student_id, cutoff),
+                   ORDER BY next_review_at ASC
+                   LIMIT ?""",
+                (student_id, cutoff, limit),
             ).fetchall()
 
         result = []
@@ -338,42 +406,53 @@ class MasteryTracker:
                 (student_id,),
             ).fetchone()[0]
 
-            # 今日复习次数
-            today = now.strftime("%Y-%m-%d")
+            # 今日/近 7 天/近 30 天复习次数（recorded_at 为 SQLite UTC 格式，统一用 SQL 截断）
             today_events = self.conn.execute(
-                "SELECT COUNT(*) FROM review_events WHERE student_id = ? AND recorded_at >= ?",
-                (student_id, today),
+                """SELECT COUNT(*) FROM review_events
+                   WHERE student_id = ? AND recorded_at >= datetime('now', 'start of day')""",
+                (student_id,),
             ).fetchone()[0]
-
-            # 近 7 天和近 30 天复习次数
-            seven_days_ago = (now - timedelta(days=7)).isoformat()
-            thirty_days_ago = (now - timedelta(days=30)).isoformat()
             events_7d = self.conn.execute(
-                "SELECT COUNT(*) FROM review_events WHERE student_id = ? AND recorded_at >= ?",
-                (student_id, seven_days_ago),
+                """SELECT COUNT(*) FROM review_events
+                   WHERE student_id = ? AND recorded_at >= datetime('now', '-7 days')""",
+                (student_id,),
             ).fetchone()[0]
             events_30d = self.conn.execute(
-                "SELECT COUNT(*) FROM review_events WHERE student_id = ? AND recorded_at >= ?",
-                (student_id, thirty_days_ago),
+                """SELECT COUNT(*) FROM review_events
+                   WHERE student_id = ? AND recorded_at >= datetime('now', '-30 days')""",
+                (student_id,),
             ).fetchone()[0]
 
-            # 平均保留率（基于实际经过时间）
+            # 平均保留率 + 保留率分布（基于实际经过时间）
             rows = self.conn.execute(
                 "SELECT half_life, last_review_at FROM review_state WHERE student_id = ?",
                 (student_id,),
             ).fetchall()
+            retention_dist = {"牢固": 0, "正常": 0, "薄弱": 0, "需复习": 0}
             if rows:
                 total_retention = 0.0
                 for hl, last_at in rows:
                     if last_at:
-                        last_review = datetime.fromisoformat(last_at)
-                        elapsed = (now - last_review).total_seconds() / 3600
+                        try:
+                            last_review = datetime.fromisoformat(last_at)
+                            elapsed = (now - last_review).total_seconds() / 3600
+                        except (ValueError, TypeError):
+                            elapsed = 0
                     else:
                         elapsed = 0
-                    total_retention += calculate_retention(hl, elapsed)
+                    r = calculate_retention(hl, elapsed)
+                    total_retention += r
+                    retention_dist[get_retention_label(r)] += 1
                 avg_retention = total_retention / len(rows)
             else:
                 avg_retention = 0
+
+            # 平均半衰期（当前记忆稳定性）
+            avg_hl_row = self.conn.execute(
+                "SELECT AVG(half_life) FROM review_state WHERE student_id = ?",
+                (student_id,),
+            ).fetchone()
+            avg_half_life = avg_hl_row[0] or 0.0
 
             # 按质量分布
             quality_dist = {}
@@ -383,16 +462,87 @@ class MasteryTracker:
             ).fetchall():
                 quality_dist[str(q_row[0])] = q_row[1]
 
+            # 回忆成功率：全程 + 近 7 天 vs 前 7 天
+            sr_row = self.conn.execute(
+                """SELECT
+                       AVG(CASE WHEN quality >= 3 THEN 1.0 ELSE 0.0 END),
+                       AVG(CASE WHEN recorded_at >= datetime('now', '-7 days')
+                                THEN CASE WHEN quality >= 3 THEN 1.0 ELSE 0.0 END END),
+                       AVG(CASE WHEN recorded_at < datetime('now', '-7 days')
+                                 AND recorded_at >= datetime('now', '-14 days')
+                                THEN CASE WHEN quality >= 3 THEN 1.0 ELSE 0.0 END END)
+                   FROM review_events WHERE student_id = ?""",
+                (student_id,),
+            ).fetchone()
+            success_rate = round(sr_row[0], 4) if sr_row[0] is not None else 0.0
+            success_rate_7d = round(sr_row[1], 4) if sr_row[1] is not None else None
+            success_rate_prev_7d = round(sr_row[2], 4) if sr_row[2] is not None else None
+
+            # 稳定性趋势：近 7 天 vs 前 7 天复习后的平均半衰期
+            st_row = self.conn.execute(
+                """SELECT
+                       AVG(CASE WHEN recorded_at >= datetime('now', '-7 days')
+                                THEN half_life_after END),
+                       AVG(CASE WHEN recorded_at < datetime('now', '-7 days')
+                                 AND recorded_at >= datetime('now', '-14 days')
+                                THEN half_life_after END)
+                   FROM review_events
+                   WHERE student_id = ? AND half_life_after IS NOT NULL""",
+                (student_id,),
+            ).fetchone()
+            stability_trend = {
+                "recent_avg_half_life": round(st_row[0], 2) if st_row[0] is not None else None,
+                "prev_avg_half_life": round(st_row[1], 2) if st_row[1] is not None else None,
+            }
+
+            # 校准分析：成功/遗忘复习时的平均预测保留率
+            cal_row = self.conn.execute(
+                """SELECT
+                       AVG(CASE WHEN quality >= 3 THEN predicted_retention END),
+                       AVG(CASE WHEN quality < 3 THEN predicted_retention END),
+                       COUNT(predicted_retention)
+                   FROM review_events
+                   WHERE student_id = ? AND predicted_retention IS NOT NULL""",
+                (student_id,),
+            ).fetchone()
+            calibration = {
+                "avg_predicted_when_recalled": round(cal_row[0], 4) if cal_row[0] is not None else None,
+                "avg_predicted_when_lapsed": round(cal_row[1], 4) if cal_row[1] is not None else None,
+                "sampled_events": cal_row[2],
+            }
+
             # 每日趋势（近 30 天）
             daily_trend = []
             for d_row in self.conn.execute(
                 """SELECT date(recorded_at) as day, COUNT(*) as cnt
                    FROM review_events
-                   WHERE student_id = ? AND recorded_at >= ?
+                   WHERE student_id = ? AND recorded_at >= datetime('now', '-30 days')
                    GROUP BY day ORDER BY day""",
-                (student_id, thirty_days_ago),
+                (student_id,),
             ).fetchall():
                 daily_trend.append({"date": d_row[0], "count": d_row[1]})
+
+            # 未来 7 天复习负荷预测（过期的计入今天）
+            forecast_7d = [
+                {"date": (now + timedelta(days=i)).strftime("%Y-%m-%d"), "count": 0, "is_today": i == 0}
+                for i in range(7)
+            ]
+            bucket_by_date = {b["date"]: b for b in forecast_7d}
+            for (next_at,) in self.conn.execute(
+                """SELECT next_review_at FROM review_state
+                   WHERE student_id = ? AND next_review_at <= ?""",
+                (student_id, (now + timedelta(days=7)).isoformat()),
+            ).fetchall():
+                try:
+                    next_dt = datetime.fromisoformat(next_at)
+                except (ValueError, TypeError):
+                    continue
+                if next_dt <= now:
+                    forecast_7d[0]["count"] += 1
+                else:
+                    day_str = next_dt.strftime("%Y-%m-%d")
+                    if day_str in bucket_by_date:
+                        bucket_by_date[day_str]["count"] += 1
 
             # 待复习数
             due_now = self.conn.execute(
@@ -411,6 +561,15 @@ class MasteryTracker:
             "avg_retention": round(avg_retention, 4),
             "quality_distribution": quality_dist,
             "daily_trend": daily_trend,
+            "success_rate": success_rate,
+            "success_rate_7d": success_rate_7d,
+            "success_rate_prev_7d": success_rate_prev_7d,
+            "retention_distribution": retention_dist,
+            "avg_half_life": round(avg_half_life, 2),
+            "avg_half_life_days": round(avg_half_life / 24, 1),
+            "stability_trend": stability_trend,
+            "forecast_7d": forecast_7d,
+            "calibration": calibration,
         }
 
     # ==================== 考试结果追踪 ====================
@@ -666,6 +825,67 @@ class MasteryTracker:
             }
             for d in details
         ]
+
+    # ==================== 仪表盘数据 ====================
+
+    def get_recent_review_events(self, student_id: str, limit: int = 20) -> list:
+        """最近复习事件（用于学习活动时间线）"""
+        with self._lock:
+            rows = self.conn.execute(
+                """SELECT event_type, entity_name, quality, recorded_at
+                   FROM review_events
+                   WHERE student_id = ?
+                   ORDER BY recorded_at DESC, id DESC
+                   LIMIT ?""",
+                (student_id, limit),
+            ).fetchall()
+        return [
+            {
+                "event_type": r[0], "entity_name": r[1],
+                "quality": r[2], "recorded_at": r[3],
+            }
+            for r in rows
+        ]
+
+    def get_chapter_accuracy(self, session_id: str) -> dict:
+        """各章节答题正确率（考试明细 + 刷题事件合并）"""
+        merged: dict = {}
+        with self._lock:
+            # 考试明细
+            for chapter, total, correct in self.conn.execute(
+                """SELECT ad.chapter, COUNT(*), SUM(ad.is_correct)
+                   FROM exam_answer_details ad
+                   JOIN exam_results er ON ad.result_id = er.id
+                   WHERE er.session_id = ? AND ad.chapter != ''
+                   GROUP BY ad.chapter""",
+                (session_id,),
+            ).fetchall():
+                merged[chapter] = {"total": total, "correct": correct or 0}
+
+            # 刷题事件（quality>=3 即答对）
+            for chapter, total, correct in self.conn.execute(
+                """SELECT chapter, COUNT(*), SUM(quality >= 3)
+                   FROM review_events
+                   WHERE student_id = ? AND chapter != ''
+                     AND event_type IN ('quiz_correct', 'quiz_wrong')
+                   GROUP BY chapter""",
+                (session_id,),
+            ).fetchall():
+                if chapter in merged:
+                    merged[chapter]["total"] += total
+                    merged[chapter]["correct"] += correct or 0
+                else:
+                    merged[chapter] = {"total": total, "correct": correct or 0}
+        return merged
+
+    def get_learning_entities(self, student_id: str) -> set:
+        """有复习记录但未掌握的实体（学习中）"""
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT entity_name FROM review_state WHERE student_id = ?",
+                (student_id,),
+            ).fetchall()
+        return {r[0] for r in rows}
 
     def close(self):
         if self.conn:

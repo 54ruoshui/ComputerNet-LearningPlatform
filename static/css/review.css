@@ -3,10 +3,17 @@
 /* --- 统计卡片网格 --- */
 .review-stats-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 14px;
     margin-bottom: 28px;
 }
+.stat-trend {
+    font-size: 0.72rem;
+    font-weight: 600;
+    margin-top: 2px;
+}
+.stat-trend.up { color: var(--green); }
+.stat-trend.down { color: var(--red); }
 .review-stat-card {
     display: flex;
     align-items: center;
@@ -360,6 +367,9 @@
 .btn-expand.open i { transform: rotate(180deg); }
 
 /* --- 响应式 --- */
+@media (max-width: 1080px) {
+    .review-stats-grid { grid-template-columns: repeat(3, 1fr); }
+}
 @media (max-width: 768px) {
     .review-stats-grid {
         grid-template-columns: repeat(2, 1fr);

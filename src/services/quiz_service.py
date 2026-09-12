@@ -150,6 +150,7 @@ class QuizService:
                        q.explanation AS explanation,
                        q.layer AS layer,
                        q.difficulty AS difficulty,
+                       q.chapter AS chapter,
                        collect(e.name) AS references
                 """,
                 id=question_id,
@@ -162,6 +163,7 @@ class QuizService:
                 "explanation": record["explanation"],
                 "layer": record["layer"],
                 "difficulty": record["difficulty"],
+                "chapter": record["chapter"] or "",
                 "references": [r for r in (record["references"] or []) if r],
             }
 

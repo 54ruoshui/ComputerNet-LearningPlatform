@@ -83,14 +83,19 @@ class MasteryService:
         entity_name: str,
         quality: int,
         event_type: str = "manual",
+        chapter: str = "",
     ) -> dict:
-        return self._tracker.record_review(session_id, entity_name, quality, event_type)
+        return self._tracker.record_review(
+            session_id, entity_name, quality, event_type, chapter
+        )
 
     def get_review_state(self, session_id: str) -> List[dict]:
         return self._tracker.get_review_state(session_id)
 
-    def get_due_reviews(self, session_id: str, lookahead_hours: float = 48) -> List[dict]:
-        return self._tracker.get_due_reviews(session_id, lookahead_hours)
+    def get_due_reviews(
+        self, session_id: str, lookahead_hours: float = 48, limit: int = 50
+    ) -> List[dict]:
+        return self._tracker.get_due_reviews(session_id, lookahead_hours, limit)
 
     def get_review_stats(self, session_id: str) -> dict:
         return self._tracker.get_review_stats(session_id)

@@ -22,6 +22,10 @@
                     <i class="fas fa-pen-to-square"></i>
                     <span>刷题</span>
                 </a>
+                <a href="/dashboard" class="topbar-btn">
+                    <i class="fas fa-chart-line"></i>
+                    <span>看板</span>
+                </a>
                 <a href="/" class="topbar-btn">
                     <i class="fas fa-arrow-left"></i>
                     <span>问答</span>
@@ -57,6 +61,21 @@
                 <div class="stat-body">
                     <div class="stat-value" id="statToday">-</div>
                     <div class="stat-label">今日已复习</div>
+                </div>
+            </div>
+            <div class="review-stat-card">
+                <div class="stat-icon" style="background:var(--accent-soft);"><i class="fas fa-circle-check"></i></div>
+                <div class="stat-body">
+                    <div class="stat-value" id="statSuccess">-</div>
+                    <div class="stat-trend" id="statSuccessTrend" style="display:none;"></div>
+                    <div class="stat-label">回忆成功率</div>
+                </div>
+            </div>
+            <div class="review-stat-card">
+                <div class="stat-icon" style="background:var(--green-soft);"><i class="fas fa-hourglass-half"></i></div>
+                <div class="stat-body">
+                    <div class="stat-value" id="statHalfLife">-</div>
+                    <div class="stat-label">平均记忆半衰期</div>
                 </div>
             </div>
         </div>
@@ -107,6 +126,22 @@
                 <h3><i class="fas fa-star-half-stroke"></i> 回忆质量分布</h3>
             </div>
             <div class="quality-bars" id="qualityBars"></div>
+        </div>
+
+        <!-- 保留率分布 -->
+        <div class="review-section" id="retentionDistSection" style="display:none;">
+            <div class="section-header">
+                <h3><i class="fas fa-gauge-high"></i> 记忆强度分布</h3>
+            </div>
+            <div class="quality-bars" id="retentionDistBars"></div>
+        </div>
+
+        <!-- 复习负荷预测 -->
+        <div class="review-section" id="forecastSection" style="display:none;">
+            <div class="section-header">
+                <h3><i class="fas fa-calendar-week"></i> 未来 7 天复习负荷</h3>
+            </div>
+            <div class="trend-chart" id="forecastChart"></div>
         </div>
 
         <!-- 手动记录复习 -->

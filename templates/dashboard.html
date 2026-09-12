@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学习仪表盘 - GraphRAG</title>
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style-new.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/quiz.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/dashboard.css') }}">
+</head>
+<body>
+    <div class="quiz-layout">
+        <!-- 顶部栏 -->
+        <header class="quiz-topbar">
+            <div class="topbar-left">
+                <span class="topbar-title">GraphRAG 学习仪表盘</span>
+            </div>
+            <div class="topbar-right">
+                <a href="/" class="topbar-btn">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>问答</span>
+                </a>
+                <a href="/quiz" class="topbar-btn">
+                    <i class="fas fa-pen-to-square"></i>
+                    <span>刷题</span>
+                </a>
+                <a href="/review" class="topbar-btn">
+                    <i class="fas fa-rotate"></i>
+                    <span>复习</span>
+                </a>
+            </div>
+        </header>
+
+        <!-- 打印专用报告区（仅打印时可见） -->
+        <div id="printReport" class="print-report"></div>
+
+        <!-- 统计卡片 -->
+        <div class="dash-stats-grid" id="statsGrid">
+            <div class="review-stat-card">
+                <div class="stat-icon" style="background:var(--accent-soft);"><i class="fas fa-cubes"></i></div>
+                <div class="stat-body">
+                    <div class="stat-value" id="statTotal">-</div>
+                    <div class="stat-label">知识实体</div>
+                </div>
+            </div>
+            <div class="review-stat-card">
+                <div class="stat-icon" style="background:var(--green-soft);"><i class="fas fa-check-circle"></i></div>
+                <div class="stat-body">
+                    <div class="stat-value" id="statMastered">-</div>
+                    <div class="stat-label">已掌握</div>
+                </div>
+            </div>
+            <div class="review-stat-card">
+                <div class="stat-icon" style="background:var(--amber-soft);"><i class="fas fa-book-open"></i></div>
+                <div class="stat-body">
+                    <div class="stat-value" id="statLearning">-</div>
+                    <div class="stat-label">学习中</div>
+                </div>
+            </div>
+            <div class="review-stat-card">
+                <div class="stat-icon" style="background:var(--red-soft);"><i class="fas fa-clock"></i></div>
+                <div class="stat-body">
+                    <div class="stat-value" id="statDue">-</div>
+                    <div class="stat-label">待复习</div>
+                </div>
+            </div>
+            <div class="review-stat-card">
+                <div class="stat-icon" style="background:var(--accent-soft);"><i class="fas fa-bullseye"></i></div>
+                <div class="stat-body">
+                    <div class="stat-value" id="statAccuracy">-</div>
+                    <div class="stat-label">平均考试正确率</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 章节掌握度热力图 -->
+        <div class="review-section">
+            <div class="section-header">
+                <h3><i class="fas fa-table-cells"></i> 章节掌握度热力图（43 节）</h3>
+                <div class="heatmap-legend">
+                    <span>低</span>
+                    <span class="legend-swatch" style="background:rgba(52,199,123,0.15);"></span>
+                    <span class="legend-swatch" style="background:rgba(52,199,123,0.35);"></span>
+                    <span class="legend-swatch" style="background:rgba(52,199,123,0.55);"></span>
+                    <span class="legend-swatch" style="background:rgba(52,199,123,0.8);"></span>
+                    <span class="legend-swatch" style="background:var(--green);"></span>
+                    <span>高</span>
+                    <span class="legend-swatch" style="background:var(--bg-3);"></span>
+                    <span>无数据</span>
+                </div>
+            </div>
+            <div class="heatmap-grid" id="heatmap">
+                <div class="quiz-empty"><p>加载中...</p></div>
+            </div>
+        </div>
+
+        <!-- 各层掌握率 + 复习日历 -->
+        <div class="dash-grid-2">
+            <div class="review-section">
+                <div class="section-header">
+                    <h3><i class="fas fa-layer-group"></i> 各层掌握率</h3>
+                </div>
+                <div class="layer-bars" id="layerMastery">
+                    <div class="quiz-empty"><p>加载中...</p></div>
+                </div>
+            </div>
+            <div class="review-section">
+                <div class="section-header">
+                    <h3><i class="fas fa-calendar-days"></i> 近 30 天复习日历</h3>
+                </div>
+                <div class="calendar-wrap" id="calendar">
+                    <div class="quiz-empty"><p>加载中...</p></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 考试正确率趋势 -->
+        <div class="review-section">
+            <div class="section-header">
+                <h3><i class="fas fa-chart-line"></i> 考试正确率趋势</h3>
+            </div>
+            <div class="trend-svg-wrap" id="trendChart">
+                <div class="quiz-empty"><p>暂无考试记录</p></div>
+            </div>
+        </div>
+
+        <!-- 薄弱点 + 最近活动 -->
+        <div class="dash-grid-2">
+            <div class="review-section">
+                <div class="section-header">
+                    <h3><i class="fas fa-triangle-exclamation"></i> 薄弱点 Top 10</h3>
+                </div>
+                <div class="weak-table-wrap" id="weakPoints">
+                    <div class="quiz-empty"><p>暂无薄弱点数据</p></div>
+                </div>
+            </div>
+            <div class="review-section">
+                <div class="section-header">
+                    <h3><i class="fas fa-clock-rotate-left"></i> 最近学习活动</h3>
+                </div>
+                <div class="timeline" id="activity">
+                    <div class="quiz-empty"><p>暂无活动记录</p></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 导出报告 -->
+        <div class="review-section">
+            <div class="section-header">
+                <h3><i class="fas fa-file-lines"></i> 学习报告</h3>
+            </div>
+            <div class="report-actions">
+                <button class="btn-submit" id="btnExportReport" onclick="exportReport()">
+                    <i class="fas fa-wand-magic-sparkles"></i> 生成学习报告（LLM）
+                </button>
+                <span class="report-hint">报告可复制、下载 Markdown，或打印整页（含图表）另存为 PDF</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 报告弹窗 -->
+    <div class="report-modal-overlay" id="reportModal" style="display:none;">
+        <div class="report-modal-card">
+            <div class="report-modal-header">
+                <h3><i class="fas fa-file-lines"></i> 学习报告</h3>
+                <button class="report-modal-close" onclick="closeReportModal()"><i class="fas fa-xmark"></i></button>
+            </div>
+            <div class="report-modal-body">
+                <pre id="reportContent"></pre>
+            </div>
+            <div class="report-modal-footer">
+                <button class="btn-secondary" onclick="copyReport()"><i class="fas fa-copy"></i> 复制</button>
+                <button class="btn-secondary" onclick="downloadReport()"><i class="fas fa-download"></i> 下载 .md</button>
+                <button class="btn-submit" onclick="printReport()"><i class="fas fa-print"></i> 打印（含图表）</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="quiz-toast" id="toast"></div>
+
+    <script src="{{ url_for('static', path='js/dashboard-app.js') }}"></script>
+</body>
+</html>
