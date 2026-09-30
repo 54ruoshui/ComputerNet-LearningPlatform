@@ -912,6 +912,126 @@ html, body { height: 100%; overflow: hidden; }
     box-shadow: 0 4px 16px rgba(91, 123, 245, 0.32);
     transform: translateY(-1px);
 }
+.btn-add:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ==================== AI 生成题目预览卡片 ==================== */
+.ai-q-card {
+    margin-top: 16px;
+    padding: 16px 18px;
+    background: var(--bg-0);
+    border: 1px solid var(--border-2);
+    border-radius: 10px;
+}
+.ai-q-card.saved {
+    opacity: 0.6;
+    border-color: var(--green);
+}
+.ai-q-head {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+.ai-q-badge {
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 20px;
+    background: var(--accent-soft, rgba(91, 123, 245, 0.08));
+    color: var(--accent);
+    border: 1px solid var(--accent-border, rgba(91, 123, 245, 0.22));
+}
+.ai-q-text, .ai-q-expl {
+    width: 100%;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+    border-radius: 8px;
+    color: var(--text-1);
+    font-family: var(--font-body);
+    font-size: 13px;
+    resize: vertical;
+}
+.ai-q-opt {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+    border-radius: 8px;
+    color: var(--text-1);
+    font-family: var(--font-body);
+    font-size: 13px;
+}
+.ai-q-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.ai-q-meta label {
+    font-size: 12px;
+    color: var(--text-3);
+}
+.ai-q-meta select {
+    padding: 6px 12px;
+    background: var(--bg-1);
+    border: 1px solid var(--border-2);
+    border-radius: 8px;
+    color: var(--text-1);
+    font-size: 13px;
+}
+.ai-q-refs {
+    margin: 4px 0 10px;
+    font-size: 12px;
+    color: var(--text-3);
+}
+.ai-q-ref {
+    display: inline-block;
+    margin: 2px 4px 2px 0;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: var(--bg-2);
+    color: var(--text-2);
+    font-size: 11px;
+}
+.ai-q-actions {
+    display: flex;
+    gap: 10px;
+}
+.btn-ai-save, .btn-ai-discard {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 7px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-ai-save {
+    background: var(--green-soft, rgba(52, 199, 123, 0.08));
+    color: var(--green);
+    border: 1px solid rgba(52, 199, 123, 0.3);
+}
+.btn-ai-save:hover { background: rgba(52, 199, 123, 0.16); }
+.btn-ai-discard {
+    background: transparent;
+    color: var(--text-3);
+    border: 1px solid var(--border-2);
+}
+.btn-ai-discard:hover {
+    color: var(--red);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+.btn-ai-save:disabled, .btn-ai-discard:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
 
 /* ==================== Toast ==================== */
 .quiz-toast {

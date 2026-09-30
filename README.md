@@ -247,6 +247,19 @@ aigc/
 | `/api/export_graph` | POST | 导出子图 |
 | `/api/generate_image` | POST | 生成 Graphviz 图片 |
 
+### 试用评估（前测-后测）
+
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/api/trial/create` | POST | 创建试用批次并生成平行卷（`{name, per_layer, seed?}`）|
+| `/api/trial/list` | GET | 批次列表 |
+| `/api/trial/{id}/participants` | GET/POST | 被试管理（POST 缺省自动生成参试码）|
+| `/api/trial/join` | POST | 被试凭码加入并绑定学习会话 |
+| `/api/trial/test/start` | POST | 开始前测/后测（`{code, phase}`，题目不含答案）|
+| `/api/trial/test/submit` | POST | 整卷提交批改（`{test_id, answers}`）|
+| `/api/trial/{id}/analysis` | GET | 前后测效果分析（整体/分层/行为/满意度）|
+| `/api/trial/{id}/report` | POST | LLM 生成用户试用评估报告 |
+
 ### 系统
 
 | 端点 | 方法 | 描述 |

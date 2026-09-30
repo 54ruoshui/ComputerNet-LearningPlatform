@@ -4,6 +4,7 @@
 支持基于艾宾浩斯遗忘曲线的复习调度。
 """
 
+import json
 import sqlite3
 import threading
 from datetime import datetime, timedelta
@@ -82,6 +83,8 @@ class MasteryTracker:
             """)
             self.conn.commit()
             self._init_exam_tables()
+            self._init_feedback_table()
+            self._init_trial_tables()
 
     def _init_exam_tables(self):
         # NOTE: called from _init_tables() which already holds self._lock
@@ -136,6 +139,71 @@ class MasteryTracker:
         self.conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_exam_details_result
             ON exam_answer_details(result_id)
+        """)
+        self.conn.commit()
+
+    def _init_feedback_table(self):
+        # NOTE: called from _init_tables() which already holds self._lock
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS answer_feedback (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id  TEXT NOT NULL DEFAULT '',
+                question    TEXT NOT NULL DEFAULT '',
+                rating      INTEGER NOT NULL,
+                comment     TEXT NOT NULL DEFAULT '',
+                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_answer_feedback_session
+            ON answer_feedback(session_id, created_at)
+        """)
+        self.conn.commit()
+
+    def _init_trial_tables(self):
+        # NOTE: called from _init_tables() which already holds self._lock
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS trials (
+                id         TEXT PRIMARY KEY,
+                name       TEXT NOT NULL,
+                config     TEXT NOT NULL DEFAULT '{}',
+                status     TEXT NOT NULL DEFAULT 'active',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS trial_participants (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                trial_id   TEXT NOT NULL,
+                code       TEXT NOT NULL,
+                session_id TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(trial_id, code)
+            )
+        """)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS trial_tests (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                trial_id       TEXT NOT NULL,
+                participant_id INTEGER NOT NULL,
+                phase          TEXT NOT NULL,
+                question_ids   TEXT NOT NULL DEFAULT '[]',
+                answers        TEXT NOT NULL DEFAULT '{}',
+                correct_count  INTEGER NOT NULL DEFAULT 0,
+                total_count    INTEGER NOT NULL DEFAULT 0,
+                details        TEXT NOT NULL DEFAULT '[]',
+                started_at     TEXT NOT NULL DEFAULT (datetime('now')),
+                submitted_at   TEXT,
+                UNIQUE(participant_id, phase)
+            )
+        """)
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_trial_participants_trial
+            ON trial_participants(trial_id)
+        """)
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_trial_tests_trial
+            ON trial_tests(trial_id)
         """)
         self.conn.commit()
 
@@ -886,6 +954,281 @@ class MasteryTracker:
                 (student_id,),
             ).fetchall()
         return {r[0] for r in rows}
+
+    # ==================== 答案满意度反馈 ====================
+
+    def record_feedback(self, session_id: str, rating: int, question: str = "", comment: str = "") -> int:
+        """记录一次答案满意度反馈，返回行 id；rating 仅接受 1（满意）/ 0（不满意）"""
+        if rating not in (0, 1):
+            raise ValueError(f"rating 必须是 0 或 1，得到: {rating}")
+        with self._lock:
+            cursor = self.conn.execute(
+                """INSERT INTO answer_feedback (session_id, question, rating, comment)
+                   VALUES (?, ?, ?, ?)""",
+                (session_id or "", (question or "")[:2000], rating, (comment or "")[:500]),
+            )
+            self.conn.commit()
+            return cursor.lastrowid
+
+    def get_feedback_stats(self, session_id: str = None) -> dict:
+        """满意度统计；session_id 为 None 时返回全局统计（对比实验报告数据源）"""
+        where, params = ("WHERE session_id = ?", (session_id,)) if session_id else ("", ())
+        with self._lock:
+            total, positive = self.conn.execute(
+                f"SELECT COUNT(*), SUM(rating) FROM answer_feedback {where}", params
+            ).fetchone()
+            by_day = [
+                {"date": r[0], "positive": r[1] or 0, "total": r[2]}
+                for r in self.conn.execute(
+                    f"""SELECT date(created_at), SUM(rating), COUNT(*) FROM answer_feedback {where}
+                        GROUP BY date(created_at) ORDER BY date(created_at)""",
+                    params,
+                )
+            ]
+        total = total or 0
+        positive = positive or 0
+        return {
+            "total": total,
+            "positive": positive,
+            "negative": total - positive,
+            "satisfaction_rate": round(positive / total, 4) if total else 0.0,
+            "by_day": by_day,
+        }
+
+    # ==================== 前测-后测试用评估 ====================
+
+    def save_trial(self, trial_id: str, name: str, config: dict) -> str:
+        """创建试用批次，config 为 JSON 可序列化 dict（含分层抽题结果）"""
+        with self._lock:
+            self.conn.execute(
+                """INSERT INTO trials (id, name, config) VALUES (?, ?, ?)""",
+                (trial_id, name, json.dumps(config, ensure_ascii=False)),
+            )
+            self.conn.commit()
+        return trial_id
+
+    def get_trial(self, trial_id: str) -> Optional[dict]:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT id, name, config, status, created_at FROM trials WHERE id = ?",
+                (trial_id,),
+            ).fetchone()
+        if not row:
+            return None
+        try:
+            config = json.loads(row[2])
+        except (ValueError, TypeError):
+            config = {}
+        return {
+            "id": row[0], "name": row[1], "config": config,
+            "status": row[3], "created_at": row[4],
+        }
+
+    def list_trials(self) -> list:
+        with self._lock:
+            rows = self.conn.execute(
+                """SELECT t.id, t.name, t.status, t.created_at,
+                          (SELECT COUNT(*) FROM trial_participants p WHERE p.trial_id = t.id),
+                          (SELECT COUNT(*) FROM trial_tests tt
+                           WHERE tt.trial_id = t.id AND tt.submitted_at IS NOT NULL)
+                   FROM trials t ORDER BY t.created_at DESC"""
+            ).fetchall()
+        return [
+            {
+                "id": r[0], "name": r[1], "status": r[2], "created_at": r[3],
+                "participant_count": r[4], "submitted_test_count": r[5],
+            }
+            for r in rows
+        ]
+
+    def add_trial_participant(self, trial_id: str, code: str) -> dict:
+        """登记被试；同一批次内 code 重复则抛 ValueError"""
+        try:
+            with self._lock:
+                cursor = self.conn.execute(
+                    """INSERT INTO trial_participants (trial_id, code) VALUES (?, ?)""",
+                    (trial_id, code),
+                )
+                self.conn.commit()
+                return {"id": cursor.lastrowid, "trial_id": trial_id, "code": code}
+        except sqlite3.IntegrityError as e:
+            raise ValueError(f"被试码 {code} 在该批次已存在") from e
+
+    def bind_participant_session(self, participant_id: int, session_id: str):
+        with self._lock:
+            self.conn.execute(
+                "UPDATE trial_participants SET session_id = ? WHERE id = ?",
+                (session_id, participant_id),
+            )
+            self.conn.commit()
+
+    def get_participant_by_code(self, code: str, active_only: bool = True) -> Optional[dict]:
+        """按被试码查参与者（join 批次状态，默认只在 active 批次中查找）"""
+        query = """
+            SELECT p.id, p.trial_id, p.code, p.session_id, p.created_at, t.status, t.name
+            FROM trial_participants p JOIN trials t ON p.trial_id = t.id
+            WHERE p.code = ?
+        """
+        params = [code]
+        if active_only:
+            query += " AND t.status = 'active'"
+        query += " ORDER BY p.created_at DESC LIMIT 1"
+        with self._lock:
+            row = self.conn.execute(query, params).fetchone()
+        if not row:
+            return None
+        return {
+            "id": row[0], "trial_id": row[1], "code": row[2],
+            "session_id": row[3], "created_at": row[4],
+            "trial_status": row[5], "trial_name": row[6],
+        }
+
+    def get_participant(self, participant_id: int) -> Optional[dict]:
+        with self._lock:
+            row = self.conn.execute(
+                """SELECT p.id, p.trial_id, p.code, p.session_id, p.created_at
+                   FROM trial_participants p WHERE p.id = ?""",
+                (participant_id,),
+            ).fetchone()
+        if not row:
+            return None
+        return {
+            "id": row[0], "trial_id": row[1], "code": row[2],
+            "session_id": row[3], "created_at": row[4],
+        }
+
+    def list_participants(self, trial_id: str) -> list:
+        """被试列表，含前测/后测完成状态"""
+        with self._lock:
+            rows = self.conn.execute(
+                """SELECT p.id, p.code, p.session_id, p.created_at,
+                          MAX(CASE WHEN tt.phase = 'pre' AND tt.submitted_at IS NOT NULL
+                              THEN 1 ELSE 0 END),
+                          MAX(CASE WHEN tt.phase = 'post' AND tt.submitted_at IS NOT NULL
+                              THEN 1 ELSE 0 END)
+                   FROM trial_participants p
+                   LEFT JOIN trial_tests tt ON tt.participant_id = p.id
+                   WHERE p.trial_id = ?
+                   GROUP BY p.id ORDER BY p.id""",
+                (trial_id,),
+            ).fetchall()
+        return [
+            {
+                "id": r[0], "code": r[1], "session_id": r[2], "created_at": r[3],
+                "pre_done": bool(r[4]), "post_done": bool(r[5]),
+            }
+            for r in rows
+        ]
+
+    def upsert_trial_test(
+        self, trial_id: str, participant_id: int, phase: str, question_ids: list
+    ) -> dict:
+        """开始一次阶段测试；未提交的已有记录幂等返回，已提交则拒绝"""
+        with self._lock:
+            row = self.conn.execute(
+                """SELECT id, question_ids, submitted_at FROM trial_tests
+                   WHERE participant_id = ? AND phase = ?""",
+                (participant_id, phase),
+            ).fetchone()
+            if row:
+                if row[2]:
+                    raise ValueError(f"该被试的 {phase} 测试已提交，不可重复作答")
+                return {"test_id": row[0], "question_ids": json.loads(row[1])}
+            cursor = self.conn.execute(
+                """INSERT INTO trial_tests (trial_id, participant_id, phase, question_ids)
+                   VALUES (?, ?, ?, ?)""",
+                (trial_id, participant_id, phase, json.dumps(question_ids)),
+            )
+            self.conn.commit()
+            return {"test_id": cursor.lastrowid, "question_ids": question_ids}
+
+    def save_trial_test_submit(
+        self, test_id: int, answers: dict, correct_count: int, total_count: int, details: list
+    ) -> dict:
+        now = datetime.now().isoformat()
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT submitted_at FROM trial_tests WHERE id = ?", (test_id,)
+            ).fetchone()
+            if not row:
+                raise ValueError(f"测试记录 {test_id} 不存在")
+            if row[0]:
+                raise ValueError("该测试已提交，不可重复提交")
+            self.conn.execute(
+                """UPDATE trial_tests
+                   SET answers = ?, correct_count = ?, total_count = ?, details = ?,
+                       submitted_at = ?
+                   WHERE id = ?""",
+                (
+                    json.dumps(answers, ensure_ascii=False), correct_count, total_count,
+                    json.dumps(details, ensure_ascii=False), now, test_id,
+                ),
+            )
+            self.conn.commit()
+        return {"test_id": test_id, "correct_count": correct_count, "total_count": total_count}
+
+    def get_trial_test(self, test_id: int) -> Optional[dict]:
+        with self._lock:
+            row = self.conn.execute(
+                """SELECT id, trial_id, participant_id, phase, question_ids, answers,
+                          correct_count, total_count, details, started_at, submitted_at
+                   FROM trial_tests WHERE id = ?""",
+                (test_id,),
+            ).fetchone()
+        if not row:
+            return None
+        return {
+            "test_id": row[0], "trial_id": row[1], "participant_id": row[2], "phase": row[3],
+            "question_ids": json.loads(row[4]),
+            "answers": json.loads(row[5]) if row[5] else {},
+            "correct_count": row[6], "total_count": row[7],
+            "details": json.loads(row[8]) if row[8] else [],
+            "started_at": row[9], "submitted_at": row[10],
+        }
+
+    def get_trial_tests(self, trial_id: str) -> list:
+        with self._lock:
+            rows = self.conn.execute(
+                """SELECT id, participant_id, phase, question_ids, answers,
+                          correct_count, total_count, details, started_at, submitted_at
+                   FROM trial_tests WHERE trial_id = ? ORDER BY participant_id, phase""",
+                (trial_id,),
+            ).fetchall()
+        return [
+            {
+                "test_id": r[0], "participant_id": r[1], "phase": r[2],
+                "question_ids": json.loads(r[3]),
+                "answers": json.loads(r[4]) if r[4] else {},
+                "correct_count": r[5], "total_count": r[6],
+                "details": json.loads(r[7]) if r[7] else [],
+                "started_at": r[8], "submitted_at": r[9],
+            }
+            for r in rows
+        ]
+
+    def get_review_behavior(self, session_id: str) -> dict:
+        """按 event_type 汇总该 session 的学习行为（答题/复习次数、覆盖知识点数）"""
+        with self._lock:
+            rows = self.conn.execute(
+                """SELECT event_type, COUNT(*), COUNT(DISTINCT entity_name)
+                   FROM review_events WHERE student_id = ? GROUP BY event_type""",
+                (session_id,),
+            ).fetchall()
+            distinct = self.conn.execute(
+                """SELECT COUNT(DISTINCT entity_name) FROM review_events
+                   WHERE student_id = ?""",
+                (session_id,),
+            ).fetchone()
+        behavior = {}
+        total_events = 0
+        for event_type, cnt, entities in rows:
+            behavior[event_type] = {"count": cnt, "entities": entities}
+            total_events += cnt
+        return {
+            "by_type": behavior,
+            "total_events": total_events,
+            "total_entities": distinct[0] if distinct else 0,
+        }
 
     def close(self):
         if self.conn:

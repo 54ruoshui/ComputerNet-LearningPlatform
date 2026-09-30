@@ -35,6 +35,18 @@ from src.services.graph_visualization_service import GraphVisualizationService
 logger = structlog.get_logger(__name__)
 
 
+def _sse(event: str, payload: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _empty_graph() -> dict:
+    return {"nodes": [], "relationships": []}
+
+
+# 兜底重试的用户消息标记：get_session_history 据此过滤，避免内部重试泄漏为可见用户消息
+_FALLBACK_RETRY_MARKER = "请基于上述知识图谱检索上下文，重新回答我刚才的问题。"
+
+
 # ==================== 工具工厂（闭包绑定 retriever） ====================
 
 def make_tools(entity_retriever: EntityRetriever, stats_service: GraphStatsService) -> list:
@@ -132,6 +144,7 @@ class GraphRAGAgent:
                 temperature=self.config.temperature,
                 max_tokens=self.config.max_tokens,
                 streaming=True,
+                max_retries=6,
             )
         except Exception as e:
             raise LLMError(
@@ -187,10 +200,10 @@ class GraphRAGAgent:
         return """你是一个计算机网络领域的资深专家和优秀教师。
 
 # 工具使用
-- 当问题涉及计算机网络的概念、协议、设备或各层知识时，调用 knowledge_search 检索知识图谱。
+- 凡是涉及计算机网络知识的问题（概念、协议、设备、原理、对比、场景等），**必须先调用 knowledge_search 检索知识图谱，再基于检索结果回答**，不允许仅凭自身知识直接作答。
 - 当需要了解图谱规模或统计数据时，调用 graph_statistics。
 - 当需要查找特定节点或探索实体关系时，调用 node_search 或 node_neighbors。
-- 对于问候、闲聊、追问已知上下文内容、或无需外部知识即可回答的一般性问题，可以直接回答，不必强制调用工具。
+- 仅以下情况可以直接回答，不必调用工具：问候、闲聊、对刚才回答内容的追问澄清、以及与计算机网络完全无关的问题。
 
 # 回答要求
 1. **详细充分**：回答应当详尽充实，每个知识点充分展开解释
@@ -204,6 +217,64 @@ class GraphRAGAgent:
 1. 技术问题需基于工具返回的信息回答，信息不足时明确说明
 2. 使用中文回答，语言流畅自然，使用 Markdown 格式
 3. 结合对话上下文连贯回答"""
+
+    # -------------------- 预检索兜底 --------------------
+
+    @staticmethod
+    def _boundary_after(messages: list, message_id: str) -> int:
+        """指定 id 消息之后的下标，用于界定本轮新增消息；未找到返回 0（宁可漏判兜底）"""
+        for i, m in enumerate(messages):
+            if getattr(m, "id", None) == message_id:
+                return i + 1
+        return 0
+
+    @staticmethod
+    def _extract_answer(messages: list) -> str:
+        for msg in reversed(messages):
+            if isinstance(msg, AIMessage) and msg.content:
+                return msg.content
+        return ""
+
+    @staticmethod
+    def _no_tool_calls(new_messages: list) -> bool:
+        return not any(
+            isinstance(m, AIMessage) and m.tool_calls for m in new_messages
+        )
+
+    def _pre_retrieve(self, question: str, session_id: str | None) -> dict | None:
+        """模型未发起工具调用时的预检索；无结果（如闲聊）返回 None"""
+        try:
+            result = self._entity_retriever.search_with_graph(question)
+        except Exception as e:
+            logger.error("预检索兜底检索失败", error=str(e))
+            return None
+        context = result.get("context") or ""
+        graph_data = result.get("graph_data") or _empty_graph()
+        if not (context or graph_data.get("nodes")):
+            return None
+        logger.warning(
+            "模型本轮未发起任何工具调用，已触发预检索兜底",
+            model=self.config.zhipu_model,
+            session_id=session_id,
+        )
+        return {"context": context, "graph_data": graph_data}
+
+    def _regenerate_answer(self, context: str, config: dict) -> str:
+        """注入检索上下文到当前会话重答；失败或无内容返回空串，调用方保留原回答"""
+        try:
+            result = self.agent.invoke({"messages": [
+                SystemMessage(content=(
+                    "上一条回答未经过知识图谱检索。以下是针对用户问题的知识图谱检索结果：\n\n"
+                    f"{context}\n\n"
+                    "请严格基于上述检索上下文，重新完整回答用户上一条问题，"
+                    "不要向用户提及本次重试或检索机制。"
+                )),
+                HumanMessage(content=_FALLBACK_RETRY_MARKER),
+            ]}, config)
+            return self._extract_answer(result.get("messages", []))
+        except Exception as e:
+            logger.error("预检索兜底重答失败，保留原始回答", error=str(e))
+            return ""
 
     # -------------------- 主查询入口 --------------------
 
@@ -225,22 +296,18 @@ class GraphRAGAgent:
         messages = []
         if mastery_context:
             messages.append(SystemMessage(content=mastery_context))
-        messages.append(HumanMessage(content=question))
-        input_messages = {"messages": messages}
+        question_id = str(uuid.uuid4())
+        messages.append(HumanMessage(content=question, id=question_id))
 
         try:
-            result = self.agent.invoke(input_messages, config)
+            result = self.agent.invoke({"messages": messages}, config)
             messages = result.get("messages", [])
 
-            # 提取最终 AI 回答
-            answer = ""
-            for msg in reversed(messages):
-                if isinstance(msg, AIMessage) and msg.content:
-                    answer = msg.content
-                    break
+            answer = self._extract_answer(messages)
+            new_messages = messages[self._boundary_after(messages, question_id):]
 
             # 从 ToolMessage 提取 graph_data
-            graph_data = {"nodes": [], "relationships": []}
+            graph_data = _empty_graph()
             context_length = 0
             for msg in messages:
                 if isinstance(msg, ToolMessage):
@@ -257,6 +324,19 @@ class GraphRAGAgent:
                         except (json.JSONDecodeError, TypeError):
                             context_length += len(msg.content) if msg.content else 0
 
+            # 兜底：模型整轮未发起任何工具调用（如模型端不返回 tool_calls）时预检索，
+            # 避免检索链路静默失效
+            retrieval_fallback = False
+            if self._no_tool_calls(new_messages):
+                fb = self._pre_retrieve(question, session_id)
+                if fb:
+                    retrieval_fallback = True
+                    if fb["graph_data"].get("nodes"):
+                        graph_data = fb["graph_data"]
+                    if fb["context"]:
+                        context_length += len(fb["context"])
+                        answer = self._regenerate_answer(fb["context"], config) or answer
+
             elapsed = time.time() - start_time
 
             response = {
@@ -268,6 +348,8 @@ class GraphRAGAgent:
             }
             if context_length > 0:
                 response["context_length"] = context_length
+            if retrieval_fallback:
+                response["retrieval_fallback"] = True
 
             logger.info("ReAct Agent 查询完成", elapsed=f"{elapsed:.2f}s", session_id=session_id)
             return response
@@ -278,7 +360,7 @@ class GraphRAGAgent:
                 "question": question,
                 "answer": f"查询处理失败: {str(e)}",
                 "processing_time": time.time() - start_time,
-                "graph_data": {"nodes": [], "relationships": []},
+                "graph_data": _empty_graph(),
                 "session_id": session_id,
             }
 
@@ -306,17 +388,21 @@ class GraphRAGAgent:
         messages.append(HumanMessage(content=question))
 
         try:
-            async for event in self._do_stream(messages, config):
+            meta: dict = {}
+            async for event in self._do_stream(question, messages, config, meta):
                 yield event
 
             elapsed = time.time() - start_time
-            yield f"event: done\ndata: {json.dumps({'session_id': session_id, 'elapsed': round(elapsed, 2)}, ensure_ascii=False)}\n\n"
+            done_data = {"session_id": session_id, "elapsed": round(elapsed, 2)}
+            if meta.get("retrieval_fallback"):
+                done_data["retrieval_fallback"] = True
+            yield _sse("done", done_data)
 
         except Exception as e:
             logger.error("流式查询失败", error=str(e), session_id=session_id)
-            yield f"event: error\ndata: {json.dumps({'msg': str(e)}, ensure_ascii=False)}\n\n"
+            yield _sse("error", {"msg": str(e)})
 
-    async def _do_stream(self, messages: list, config: dict):
+    async def _do_stream(self, question: str, messages: list, config: dict, meta: dict):
         import aiosqlite as _aiosqlite
         _conn = _aiosqlite.connect(self.config.sqlite_db_path)
         _checkpointer = AsyncSqliteSaver(_conn)
@@ -326,6 +412,7 @@ class GraphRAGAgent:
             prompt=self._build_system_prompt(),
             checkpointer=_checkpointer,
         )
+        saw_tool = False
         try:
             async for event in _agent.astream_events(
                 {"messages": messages}, config, version="v2"
@@ -333,8 +420,9 @@ class GraphRAGAgent:
                 kind = event.get("event", "")
 
                 if kind == "on_tool_start":
+                    saw_tool = True
                     tool_name = event.get("name", "")
-                    yield f"event: status\ndata: {json.dumps({'msg': f'检索中：{tool_name}...'}, ensure_ascii=False)}\n\n"
+                    yield _sse("status", {"msg": f"检索中：{tool_name}..."})
 
                 elif kind == "on_tool_end":
                     if event.get("name") == "knowledge_search":
@@ -345,14 +433,23 @@ class GraphRAGAgent:
                             if isinstance(parsed, dict) and "graph_data" in parsed:
                                 gd = parsed["graph_data"]
                                 if gd.get("nodes"):
-                                    yield f"event: graph\ndata: {json.dumps(gd, ensure_ascii=False)}\n\n"
+                                    yield _sse("graph", gd)
                         except (json.JSONDecodeError, TypeError, AttributeError):
                             pass
 
                 elif kind == "on_chat_model_stream":
                     chunk = event.get("data", {}).get("chunk")
                     if chunk and hasattr(chunk, "content") and chunk.content:
-                        yield f"event: token\ndata: {json.dumps({'content': chunk.content}, ensure_ascii=False)}\n\n"
+                        yield _sse("token", {"content": chunk.content})
+
+            # 兜底：整轮无工具调用时补发预检索结果（token 已流出，无法重答，
+            # 但保证图谱面板有数据且失效可被观测）
+            if not saw_tool:
+                fb = self._pre_retrieve(question, config.get("configurable", {}).get("thread_id"))
+                if fb:
+                    if fb["graph_data"].get("nodes"):
+                        yield _sse("graph", fb["graph_data"])
+                    meta["retrieval_fallback"] = True
         finally:
             await _conn.close()
 
@@ -366,7 +463,7 @@ class GraphRAGAgent:
                 messages = state.values.get("messages", [])
                 history = []
                 for msg in messages:
-                    if isinstance(msg, HumanMessage):
+                    if isinstance(msg, HumanMessage) and _FALLBACK_RETRY_MARKER not in msg.content:
                         history.append({"role": "user", "content": msg.content})
                     elif isinstance(msg, AIMessage) and msg.content:
                         history.append({"role": "assistant", "content": msg.content})
@@ -393,11 +490,13 @@ class GraphRAGAgent:
         if self._db_conn:
             try:
                 self.checkpointer.delete_thread(session_id)
+                self._sessions.discard(session_id)
                 return True
             except Exception:
                 pass
+        existed = session_id in self._sessions
         self._sessions.discard(session_id)
-        return session_id in self._sessions
+        return existed
 
     # -------------------- 其他接口 --------------------
 
@@ -416,5 +515,5 @@ class GraphRAGAgent:
         if self.driver:
             self.driver.close()
         if self._db_conn:
-            asyncio.run(self._db_conn.close())
+            self._db_conn.close()
             logger.info("已关闭 Neo4j 及 SQLite 连接")

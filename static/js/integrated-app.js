@@ -748,6 +748,9 @@ async function submitQuery() {
                     if (payload.elapsed) {
                         badgesHtml += '<span class="msg-mode">' + payload.elapsed + 's</span>';
                     }
+                    if (payload.retrieval_fallback) {
+                        badgesHtml += '<span class="msg-mode" title="模型未自主调用检索工具，系统已自动预检索补充">预检索兜底</span>';
+                    }
                     badgesHtml += '</div>';
                     if (bubble) {
                         bubble.insertAdjacentHTML('afterbegin', badgesHtml);
@@ -759,6 +762,35 @@ async function submitQuery() {
                         graphBtn.onclick = function() { openGraphPanel(); };
                         bubble.appendChild(graphBtn);
                     }
+                    // 满意度反馈按钮（对比实验数据采集）
+                    var fbWrap = document.createElement('div');
+                    fbWrap.className = 'msg-feedback';
+                    fbWrap.innerHTML =
+                        '<span class="msg-feedback-label">这个回答有帮助吗？</span>' +
+                        '<button class="msg-fb-btn" data-rating="1" title="回答有帮助"><i class="fas fa-thumbs-up"></i></button>' +
+                        '<button class="msg-fb-btn" data-rating="0" title="回答没帮助"><i class="fas fa-thumbs-down"></i></button>';
+                    fbWrap.querySelectorAll('.msg-fb-btn').forEach(function (btn) {
+                        btn.onclick = function () {
+                            var rating = parseInt(btn.dataset.rating, 10);
+                            fbWrap.querySelectorAll('.msg-fb-btn').forEach(function (b) { b.disabled = true; });
+                            btn.classList.add('active');
+                            fbWrap.querySelector('.msg-feedback-label').textContent = '感谢你的反馈';
+                            fetch('/api/feedback', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    session_id: currentSessionId || '',
+                                    question: question,
+                                    rating: rating
+                                })
+                            }).catch(function () {
+                                fbWrap.querySelectorAll('.msg-fb-btn').forEach(function (b) { b.disabled = false; });
+                                btn.classList.remove('active');
+                                fbWrap.querySelector('.msg-feedback-label').textContent = '提交失败，请重试';
+                            });
+                        };
+                    });
+                    bubble.appendChild(fbWrap);
                 }
                 addToHistory(question, answerText, payload.elapsed || 0);
             } else if (type === 'error') {

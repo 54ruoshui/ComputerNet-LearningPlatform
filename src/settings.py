@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # ZhipuAI LLM
     zhipuai_api_key: str
-    zhipuai_model: str = "glm-4-flash"
+    zhipuai_model: str = "glm-4-flash-250414"
     zhipuai_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
 
     # Qwen / DashScope Embeddings

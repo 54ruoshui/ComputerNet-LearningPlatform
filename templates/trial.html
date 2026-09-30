@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>试用评估 - GraphRAG</title>
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style-new.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/quiz.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/trial.css') }}">
+</head>
+<body>
+    <div class="quiz-app-layout">
+        <main class="quiz-main">
+            <header class="quiz-topbar">
+                <div class="topbar-left">
+                    <span class="current-label">前测-后测试用评估</span>
+                </div>
+                <div class="topbar-right">
+                    <a href="/quiz" class="topbar-btn">
+                        <i class="fas fa-pen-to-square"></i>
+                        <span>刷题</span>
+                    </a>
+                    <a href="/review" class="topbar-btn">
+                        <i class="fas fa-brain"></i>
+                        <span>复习</span>
+                    </a>
+                    <a href="/dashboard" class="topbar-btn">
+                        <i class="fas fa-chart-line"></i>
+                        <span>看板</span>
+                    </a>
+                    <a href="/" class="topbar-btn">
+                        <i class="fas fa-arrow-left"></i>
+                        <span>问答</span>
+                    </a>
+                </div>
+            </header>
+
+            <div class="quiz-content">
+                <!-- Tab 切换 -->
+                <div class="quiz-tabs">
+                    <button class="quiz-tab active" id="tabAdmin" onclick="switchTrialTab('admin')">
+                        <i class="fas fa-clipboard-list"></i> 研究管理
+                    </button>
+                    <button class="quiz-tab" id="tabParticipant" onclick="switchTrialTab('participant')">
+                        <i class="fas fa-user-pen"></i> 被试入口
+                    </button>
+                </div>
+
+                <!-- ===== 研究管理面板 ===== -->
+                <div id="adminPanel">
+                    <!-- 批次列表视图 -->
+                    <div id="adminListView">
+                        <div class="trial-create-card">
+                            <div class="section-title"><i class="fas fa-plus-circle"></i> 创建试用批次</div>
+                            <div class="trial-create-form">
+                                <div class="form-group">
+                                    <label>批次名称</label>
+                                    <input id="trialName" placeholder="例如：2026 秋季试用 第 1 批">
+                                </div>
+                                <div class="form-group">
+                                    <label>每层题量（前测/后测各 N 题 × 5 层）</label>
+                                    <input id="trialPerLayer" type="number" value="4" min="2" max="10">
+                                </div>
+                                <div class="form-group">
+                                    <label>随机种子（可选，固定可复现）</label>
+                                    <input id="trialSeed" type="number" placeholder="留空随机">
+                                </div>
+                                <button class="btn-trial-primary" id="createTrialBtn" onclick="createTrial()">
+                                    <i class="fas fa-wand-magic-sparkles"></i> 生成平行卷并创建
+                                </button>
+                            </div>
+                        </div>
+                        <div class="section-title"><i class="fas fa-clipboard-list"></i> 试用批次</div>
+                        <div id="trialList" class="trial-list"><p class="trial-hint">加载中...</p></div>
+                    </div>
+
+                    <!-- 批次详情视图 -->
+                    <div id="adminDetailView" style="display:none;">
+                        <div class="exam-header trial-detail-header">
+                            <div class="exam-header-left">
+                                <button class="btn-back-exam" onclick="backToTrialList()">
+                                    <i class="fas fa-arrow-left"></i>
+                                </button>
+                                <span class="exam-title" id="detailTrialName">批次</span>
+                            </div>
+                            <div class="exam-header-right">
+                                <button class="btn-trial-ghost" onclick="showAnalysis()">
+                                    <i class="fas fa-chart-pie"></i> 效果分析
+                                </button>
+                                <button class="btn-trial-primary" onclick="generateReport()">
+                                    <i class="fas fa-file-lines"></i> 生成评估报告
+                                </button>
+                            </div>
+                        </div>
+                        <div class="trial-meta-row" id="detailTrialMeta"></div>
+                        <div class="section-title"><i class="fas fa-users"></i> 被试名单</div>
+                        <div class="trial-add-row">
+                            <button class="btn-trial-ghost" onclick="addParticipant()">
+                                <i class="fas fa-user-plus"></i> 添加被试（自动生成参试码）
+                            </button>
+                        </div>
+                        <div id="participantTable"></div>
+                    </div>
+
+                    <!-- 分析视图 -->
+                    <div id="adminAnalysisView" style="display:none;">
+                        <div class="exam-header trial-detail-header">
+                            <div class="exam-header-left">
+                                <button class="btn-back-exam" onclick="backToTrialDetail()">
+                                    <i class="fas fa-arrow-left"></i>
+                                </button>
+                                <span class="exam-title">效果分析</span>
+                            </div>
+                        </div>
+                        <div id="analysisBody"><p class="trial-hint">加载中...</p></div>
+                    </div>
+
+                    <!-- 报告视图 -->
+                    <div id="adminReportView" style="display:none;">
+                        <div class="exam-header trial-detail-header">
+                            <div class="exam-header-left">
+                                <button class="btn-back-exam" onclick="backToTrialDetail()">
+                                    <i class="fas fa-arrow-left"></i>
+                                </button>
+                                <span class="exam-title">用户试用评估报告</span>
+                            </div>
+                            <div class="exam-header-right">
+                                <button class="btn-trial-ghost" onclick="copyReport()">
+                                    <i class="fas fa-copy"></i> 复制全文
+                                </button>
+                            </div>
+                        </div>
+                        <div id="reportBody"><p class="trial-hint">生成中，请稍候...</p></div>
+                    </div>
+                </div>
+
+                <!-- ===== 被试面板 ===== -->
+                <div id="participantPanel" style="display:none;">
+                    <!-- 输码加入 -->
+                    <div id="partJoinView">
+                        <div class="trial-join-card">
+                            <div class="join-icon"><i class="fas fa-key"></i></div>
+                            <h2>输入参试码加入试用</h2>
+                            <p class="trial-hint">参试码由研究者发放。加入后本浏览器的学习记录将关联到你的前后测成绩。</p>
+                            <div class="join-form">
+                                <input id="joinCode" placeholder="例如 P0042" maxlength="20">
+                                <button class="btn-trial-primary" onclick="joinTrial()">
+                                    <i class="fas fa-right-to-bracket"></i> 加入
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 状态卡 -->
+                    <div id="partStatusView" style="display:none;">
+                        <div class="trial-status-card">
+                            <div class="status-code">参试码 <strong id="partCodeLabel"></strong></div>
+                            <div class="status-steps">
+                                <div class="status-step" id="stepPre">
+                                    <div class="step-icon"><i class="fas fa-play"></i></div>
+                                    <div class="step-body">
+                                        <div class="step-title">前测</div>
+                                        <div class="step-desc" id="preStepDesc">未开始</div>
+                                    </div>
+                                    <button class="btn-trial-primary btn-step" id="btnPre" onclick="startTrialTest('pre')">开始前测</button>
+                                </div>
+                                <div class="status-step" id="stepLearn">
+                                    <div class="step-icon"><i class="fas fa-book-open-reader"></i></div>
+                                    <div class="step-body">
+                                        <div class="step-title">系统学习期</div>
+                                        <div class="step-desc">使用 <a href="/">智能问答</a>、<a href="/quiz">刷题</a>、<a href="/review">复习</a> 自由学习</div>
+                                    </div>
+                                </div>
+                                <div class="status-step" id="stepPost">
+                                    <div class="step-icon"><i class="fas fa-flag-checkered"></i></div>
+                                    <div class="step-body">
+                                        <div class="step-title">后测</div>
+                                        <div class="step-desc" id="postStepDesc">完成前测后解锁</div>
+                                    </div>
+                                    <button class="btn-trial-primary btn-step" id="btnPost" onclick="startTrialTest('post')" disabled>开始后测</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 作答视图（仿考试作答） -->
+                    <div class="exam-take-view" id="partTakeView" style="display:none;">
+                        <div class="exam-header">
+                            <div class="exam-header-left">
+                                <span class="exam-title" id="takeTitle">前测</span>
+                            </div>
+                            <div class="exam-header-center">
+                                <span class="exam-answered-badge" id="takeAnsweredBadge">已答 0/0</span>
+                            </div>
+                            <div class="exam-header-right">
+                                <button class="btn-toggle-navigator" onclick="toggleTrialNav()" title="题目导航">
+                                    <i class="fas fa-th"></i>
+                                </button>
+                                <button class="btn-submit-exam" id="takeSubmitBtn" onclick="submitTrialTest()">
+                                    <i class="fas fa-check"></i> 交卷
+                                </button>
+                            </div>
+                        </div>
+                        <div class="exam-question-nav" id="trialNav" style="display:none;">
+                            <div class="exam-nav-header">
+                                <span>题目导航</span>
+                                <button class="btn-nav-close" onclick="toggleTrialNav()">
+                                    <i class="fas fa-xmark"></i>
+                                </button>
+                            </div>
+                            <div class="exam-nav-legend">
+                                <span><span class="nav-dot answered"></span> 已答</span>
+                                <span><span class="nav-dot unanswered"></span> 未答</span>
+                                <span><span class="nav-dot current"></span> 当前</span>
+                            </div>
+                            <div class="exam-nav-grid" id="trialNavGrid"></div>
+                        </div>
+                        <div class="exam-question-card">
+                            <div class="exam-q-header">
+                                <div class="quiz-progress" id="takeProgress"></div>
+                                <div class="exam-question-score" id="takeMeta"></div>
+                            </div>
+                            <div class="quiz-question-text" id="takeQuestionText"></div>
+                            <div class="options-list" id="takeOptionsList"></div>
+                            <div class="quiz-actions exam-nav-actions">
+                                <button class="btn-nav-arrow" id="takePrevBtn" onclick="trialPrevQuestion()" style="visibility:hidden;">
+                                    <i class="fas fa-chevron-left"></i> 上一题
+                                </button>
+                                <button class="btn-nav-arrow btn-nav-next" id="takeNextBtn" onclick="trialNextQuestion()">
+                                    下一题 <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 成绩视图 -->
+                    <div class="exam-result-view" id="partResultView" style="display:none;">
+                        <div class="exam-result-score-circle" id="partResultScore"></div>
+                        <div id="partResultDetails"></div>
+                        <div class="exam-recommendation-actions">
+                            <button class="btn-back-to-papers" onclick="backToPartStatus()">
+                                <i class="fas fa-arrow-left"></i> 返回
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="quiz-toast" id="toast"></div>
+
+    <script src="{{ url_for('static', path='js/trial-app.js') }}"></script>
+</body>
+</html>

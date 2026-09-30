@@ -514,6 +514,125 @@
         } catch (e) { showToast("添加失败: " + e.message, "error"); }
     };
 
+    // ==================== AI 生成题目 ====================
+
+    let aiGenerated = [];
+
+    window.toggleAiForm = function () {
+        const active = $("aiForm").classList.toggle("active");
+        const arrow = $("aiFormToggleArrow");
+        if (arrow) arrow.style.transform = active ? "rotate(180deg)" : "";
+    };
+
+    window.generateAiQuestions = async function () {
+        const count = Math.min(10, Math.max(1, parseInt($("aiCount").value, 10) || 5));
+        $("aiCount").value = count;
+        const seeds = $("aiSeeds").value.trim()
+            ? $("aiSeeds").value.split(/[,，]/).map(s => s.trim()).filter(Boolean)
+            : null;
+        const btn = $("aiGenerateBtn");
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 生成中...';
+        try {
+            const data = await apiPost("/api/quiz/generate", {
+                layer: $("aiLayer").value || null,
+                difficulty: $("aiDiff").value || null,
+                count: count,
+                seed_entities: seeds,
+            });
+            aiGenerated = data.questions || [];
+            renderAiCards();
+            showToast(`生成 ${aiGenerated.length} 道题（种子：${(data.seed_entities || []).join("、") || "随机"}），请预览确认后入库`,
+                "success");
+        } catch (e) {
+            showToast("生成失败: " + e.message, "error");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> 生成题目';
+        }
+    };
+
+    function renderAiCards() {
+        const wrap = $("aiPreview");
+        wrap.innerHTML = "";
+        aiGenerated.forEach((q, idx) => {
+            if (!q) return;
+            const card = document.createElement("div");
+            card.className = "ai-q-card";
+            card.id = "aiQCard" + idx;
+            const refs = (q.references || []).map(r => `<span class="ai-q-ref">${escapeHtml(r)}</span>`).join("");
+            card.innerHTML = `
+                <div class="ai-q-head">
+                    <span class="ai-q-badge">${escapeHtml(q.layer)}</span>
+                    <span class="ai-q-badge">${escapeHtml(q.difficulty)}</span>
+                    ${q.chapter ? `<span class="ai-q-badge">${escapeHtml(q.chapter)}</span>` : ""}
+                </div>
+                <textarea class="ai-q-text" rows="2">${escapeHtml(q.text)}</textarea>
+                <div class="form-row">
+                    <input class="ai-q-opt" value="${escapeHtml(q.option_a)}" placeholder="选项 A">
+                    <input class="ai-q-opt" value="${escapeHtml(q.option_b)}" placeholder="选项 B">
+                </div>
+                <div class="form-row">
+                    <input class="ai-q-opt" value="${escapeHtml(q.option_c)}" placeholder="选项 C">
+                    <input class="ai-q-opt" value="${escapeHtml(q.option_d)}" placeholder="选项 D">
+                </div>
+                <div class="ai-q-meta">
+                    <label>正确答案</label>
+                    <select class="ai-q-answer">
+                        ${["A", "B", "C", "D"].map(l =>
+                            `<option value="${l}" ${l === q.correct_answer ? "selected" : ""}>${l}</option>`).join("")}
+                    </select>
+                </div>
+                <textarea class="ai-q-expl" rows="2">${escapeHtml(q.explanation)}</textarea>
+                ${refs ? `<div class="ai-q-refs">关联实体：${refs}</div>` : ""}
+                <div class="ai-q-actions">
+                    <button class="btn-ai-save" onclick="confirmAiQuestion(${idx})">
+                        <i class="fas fa-check"></i> 确认入库
+                    </button>
+                    <button class="btn-ai-discard" onclick="discardAiQuestion(${idx})">
+                        <i class="fas fa-trash"></i> 丢弃
+                    </button>
+                </div>`;
+            wrap.appendChild(card);
+        });
+    }
+
+    window.confirmAiQuestion = async function (idx) {
+        const card = $("aiQCard" + idx);
+        const q = aiGenerated[idx];
+        if (!card || !q) return;
+        const opts = Array.from(card.querySelectorAll(".ai-q-opt")).map(i => i.value.trim());
+        const payload = {
+            text: card.querySelector(".ai-q-text").value.trim(),
+            option_a: opts[0], option_b: opts[1], option_c: opts[2], option_d: opts[3],
+            correct_answer: card.querySelector(".ai-q-answer").value,
+            explanation: card.querySelector(".ai-q-expl").value.trim(),
+            difficulty: q.difficulty,
+            layer: q.layer,
+            chapter: q.chapter || "",
+            references: q.references || [],
+            source: "ai",
+        };
+        for (const k of ["text", "option_a", "option_b", "option_c", "option_d", "explanation"]) {
+            if (!payload[k]) { showToast("请填写所有必填字段", "error"); return; }
+        }
+        try {
+            await apiPost("/api/quiz/questions", payload);
+            card.classList.add("saved");
+            card.querySelectorAll("textarea,input,select,button").forEach(el => el.disabled = true);
+            showToast("题目已入库", "success");
+            loadChapterStructure();
+        } catch (e) {
+            showToast("入库失败: " + e.message, "error");
+        }
+    };
+
+    window.discardAiQuestion = function (idx) {
+        const card = $("aiQCard" + idx);
+        if (card) card.remove();
+        aiGenerated[idx] = null;
+    };
+
     // ==================== Toast ====================
 
     function showToast(msg, type) {

@@ -1,0 +1,344 @@
+/* 前测-后测试用评估页面专属样式（布局/选项/作答等复用 quiz.css） */
+
+/* ---- 创建批次表单 ---- */
+.trial-create-card {
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+}
+
+.trial-create-form {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr auto;
+    gap: 14px;
+    align-items: end;
+}
+
+.trial-create-form .form-group label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-3);
+    margin-bottom: 6px;
+}
+
+.trial-create-form .form-group input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--border-1);
+    border-radius: 8px;
+    background: var(--bg-2);
+    color: var(--text-1);
+    font-size: 13px;
+}
+
+.trial-create-form .form-group input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+@media (max-width: 900px) {
+    .trial-create-form { grid-template-columns: 1fr; }
+}
+
+.btn-trial-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+}
+
+.btn-trial-primary:hover { opacity: 0.9; }
+.btn-trial-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-trial-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 16px;
+    border: 1px solid var(--border-1);
+    border-radius: 8px;
+    background: var(--bg-2);
+    color: var(--text-1);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+
+.btn-trial-ghost:hover { background: var(--bg-3, var(--bg-1)); }
+
+/* ---- 批次列表 ---- */
+.trial-list { display: flex; flex-direction: column; gap: 10px; }
+
+.trial-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.trial-card:hover { border-color: var(--accent); }
+
+.trial-card-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.trial-card-body { flex: 1; min-width: 0; }
+.trial-card-title { font-size: 15px; font-weight: 600; color: var(--text-1); }
+.trial-card-meta {
+    display: flex;
+    gap: 14px;
+    margin-top: 5px;
+    font-size: 12px;
+    color: var(--text-3);
+    flex-wrap: wrap;
+}
+
+.trial-tag-closed {
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: var(--bg-2);
+    color: var(--text-4);
+}
+
+.trial-hint { font-size: 13px; color: var(--text-3); line-height: 1.7; }
+.trial-muted { color: var(--text-4); }
+
+/* ---- 批次详情 ---- */
+.trial-detail-header { margin-bottom: 14px; }
+.trial-meta-row {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--text-3);
+    margin-bottom: 16px;
+}
+
+.trial-add-row { margin-bottom: 12px; }
+
+.trial-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.trial-table th {
+    text-align: left;
+    padding: 10px 14px;
+    background: var(--bg-2);
+    color: var(--text-3);
+    font-weight: 600;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border-1);
+}
+
+.trial-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-1);
+    color: var(--text-1);
+}
+
+.trial-table tr:last-child td { border-bottom: none; }
+.trial-table code {
+    font-family: "JetBrains Mono", monospace;
+    background: var(--bg-2);
+    padding: 2px 8px;
+    border-radius: 6px;
+    color: var(--accent);
+}
+
+.trial-mark { font-size: 12px; }
+.trial-mark.ok { color: var(--green); }
+.trial-mark.no { color: var(--text-4); }
+
+.trial-gain-up { color: var(--green); font-weight: 600; }
+.trial-gain-down { color: var(--red); font-weight: 600; }
+
+/* ---- 分析 ---- */
+.trial-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.trial-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+    border-radius: 12px;
+}
+
+.trial-stat-card .stat-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.trial-stat-card .stat-value { font-size: 18px; font-weight: 700; color: var(--text-1); }
+.trial-stat-card .stat-label { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+
+.trial-caveat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(234, 179, 8, 0.08);
+    color: var(--warning, #b45309);
+    font-size: 13px;
+    margin-bottom: 16px;
+}
+
+/* ---- 报告 ---- */
+.trial-report {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: "Noto Sans SC", sans-serif;
+    font-size: 13.5px;
+    line-height: 1.8;
+    color: var(--text-1);
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+    border-radius: 12px;
+    padding: 22px 26px;
+}
+
+/* ---- 被试：加入 ---- */
+.trial-join-card {
+    max-width: 480px;
+    margin: 40px auto;
+    text-align: center;
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+    border-radius: 16px;
+    padding: 40px 32px;
+}
+
+.trial-join-card .join-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 16px;
+    border-radius: 16px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+}
+
+.trial-join-card h2 { font-size: 18px; color: var(--text-1); margin-bottom: 8px; }
+
+.join-form { display: flex; gap: 10px; margin-top: 22px; }
+
+.join-form input {
+    flex: 1;
+    padding: 11px 14px;
+    border: 1px solid var(--border-1);
+    border-radius: 8px;
+    background: var(--bg-2);
+    color: var(--text-1);
+    font-size: 14px;
+    letter-spacing: 1px;
+}
+
+.join-form input:focus { outline: none; border-color: var(--accent); }
+
+/* ---- 被试：状态卡 ---- */
+.trial-status-card {
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+    border-radius: 16px;
+    padding: 26px;
+    max-width: 640px;
+    margin: 24px auto;
+}
+
+.status-code { text-align: center; font-size: 14px; color: var(--text-3); margin-bottom: 22px; }
+.status-code strong {
+    font-family: "JetBrains Mono", monospace;
+    color: var(--accent);
+    font-size: 18px;
+    margin-left: 6px;
+}
+
+.status-steps { display: flex; flex-direction: column; gap: 14px; }
+
+.status-step {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    border: 1px solid var(--border-1);
+    border-radius: 12px;
+    background: var(--bg-2);
+}
+
+.status-step.done { border-color: var(--green); }
+
+.status-step .step-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.status-step.done .step-icon { background: var(--green-soft); color: var(--green); }
+
+.status-step .step-body { flex: 1; }
+.status-step .step-title { font-size: 14px; font-weight: 600; color: var(--text-1); }
+.status-step .step-desc { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+.status-step .step-desc a { color: var(--accent); text-decoration: none; }
+
+.btn-step { margin-left: auto; }
+
+@media (max-width: 640px) {
+    .status-step { flex-wrap: wrap; }
+    .btn-step { margin-left: 0; width: 100%; justify-content: center; }
+}

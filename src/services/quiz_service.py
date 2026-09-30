@@ -11,6 +11,8 @@ logger = structlog.get_logger(__name__)
 
 VALID_LAYERS = {"物理层", "数据链路层", "网络层", "传输层", "应用层"}
 VALID_DIFFICULTIES = {"basic", "medium", "hard"}
+# 图谱 Layer 节点用「运输层」（教材叫法），MCQ 子系统用「传输层」
+LAYER_ALIASES = {"传输层": "运输层", "运输层": "传输层"}
 
 
 class QuizService:
@@ -211,7 +213,8 @@ class QuizService:
                     q.explanation = $explanation,
                     q.difficulty = $difficulty,
                     q.layer = $layer,
-                    q.chapter = $chapter
+                    q.chapter = $chapter,
+                    q.source = $source
                 """,
                 id=q_id,
                 text=data["text"],
@@ -224,16 +227,19 @@ class QuizService:
                 difficulty=data["difficulty"],
                 layer=data["layer"],
                 chapter=data.get("chapter", ""),
+                source=data.get("source", "manual"),
             )
 
             session.run(
                 """
                 MATCH (q:MCQuestion {id: $id})
-                MATCH (l:Layer {name: $layer})
+                MATCH (l:Layer) WHERE l.name IN [$layer, $alias]
                 MERGE (q)-[:ABOUT]->(l)
                 """,
                 id=q_id,
                 layer=data["layer"],
+                # 图谱 Layer 节点用「运输层」，MCQ 用「传输层」，同义兼容
+                alias=LAYER_ALIASES.get(data["layer"], data["layer"]),
             )
 
             for ref in data.get("references", []):

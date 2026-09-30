@@ -13,7 +13,9 @@ from starlette.responses import JSONResponse
 ENDPOINT_LIMITS = {
     "/api/query":     (60, 10),   # 查询最耗资源
     "/api/quiz/answer": (10, 5),  # 答题短窗口
+    "/api/quiz/generate": (60, 5),  # LLM 出题较耗资源
     "/api/generate_image": (60, 5),
+    "/api/trial/report": (60, 5),  # LLM 生成评估报告较耗资源
 }
 
 DEFAULT_LIMIT = (30, 30)  # 其他 API: 30秒内 30次

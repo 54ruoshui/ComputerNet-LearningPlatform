@@ -99,3 +99,13 @@ class MasteryService:
 
     def get_review_stats(self, session_id: str) -> dict:
         return self._tracker.get_review_stats(session_id)
+
+    # ==================== 答案满意度反馈 ====================
+
+    def record_feedback(self, session_id: str, rating: int, question: str = "", comment: str = "") -> int:
+        return self._tracker.record_feedback(session_id, rating, question, comment)
+
+    def get_feedback_stats(self, session_id: str = None) -> dict:
+        if not self._tracker:
+            return {"total": 0, "positive": 0, "negative": 0, "satisfaction_rate": 0.0, "by_day": []}
+        return self._tracker.get_feedback_stats(session_id)

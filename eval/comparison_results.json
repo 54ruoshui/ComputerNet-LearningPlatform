@@ -1,0 +1,719 @@
+{
+  "baseline": {
+    "mcq_total": 50,
+    "mcq_accuracy": 0.86,
+    "mcq_by_layer": {
+      "传输层": 0.7,
+      "应用层": 0.9,
+      "数据链路层": 0.9,
+      "物理层": 1.0,
+      "网络层": 0.8
+    },
+    "mcq_parse_fail": 0,
+    "qa_coverage": 0.6458
+  },
+  "system": {
+    "mcq_total": 50,
+    "mcq_accuracy": 0.68,
+    "mcq_by_layer": {
+      "传输层": 0.6,
+      "应用层": 0.8,
+      "数据链路层": 0.5,
+      "物理层": 0.8,
+      "网络层": 0.7
+    },
+    "mcq_parse_fail": 0,
+    "qa_coverage": 0.7683,
+    "qa_retrieval_hit": 0.6458
+  },
+  "judge": {
+    "win": 0,
+    "tie": 20,
+    "loss": 0,
+    "win_rate": 0.0,
+    "judged": 20
+  },
+  "detail_mcq": [
+    {
+      "id": "mcq_import_14",
+      "layer": "物理层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_import_10",
+      "layer": "物理层",
+      "answer": "C",
+      "baseline": "C",
+      "system": "D"
+    },
+    {
+      "id": "mcq_import_23",
+      "layer": "物理层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_import_34",
+      "layer": "物理层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_970db8e6",
+      "layer": "物理层",
+      "answer": "A",
+      "baseline": "A",
+      "system": "D"
+    },
+    {
+      "id": "mcq_import_114",
+      "layer": "物理层",
+      "answer": "D",
+      "baseline": "D",
+      "system": "D"
+    },
+    {
+      "id": "mcq_import_22",
+      "layer": "物理层",
+      "answer": "A",
+      "baseline": "A",
+      "system": "A"
+    },
+    {
+      "id": "mcq_import_27",
+      "layer": "物理层",
+      "answer": "C",
+      "baseline": "C",
+      "system": "C"
+    },
+    {
+      "id": "mcq_import_12",
+      "layer": "物理层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_f1c4730d",
+      "layer": "物理层",
+      "answer": "C",
+      "baseline": "C",
+      "system": "C"
+    },
+    {
+      "id": "mcq_fe75cdbd",
+      "layer": "数据链路层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "D"
+    },
+    {
+      "id": "mcq_f42b7023",
+      "layer": "数据链路层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_import_111",
+      "layer": "数据链路层",
+      "answer": "A",
+      "baseline": "A",
+      "system": "C"
+    },
+    {
+      "id": "mcq_1d690a8f",
+      "layer": "数据链路层",
+      "answer": "C",
+      "baseline": "D",
+      "system": "C"
+    },
+    {
+      "id": "mcq_import_175",
+      "layer": "数据链路层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_import_127",
+      "layer": "数据链路层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_1c65474c",
+      "layer": "数据链路层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "D"
+    },
+    {
+      "id": "mcq_import_129",
+      "layer": "数据链路层",
+      "answer": "A",
+      "baseline": "A",
+      "system": "A"
+    },
+    {
+      "id": "mcq_import_37",
+      "layer": "数据链路层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "D"
+    },
+    {
+      "id": "mcq_import_184",
+      "layer": "数据链路层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "C"
+    },
+    {
+      "id": "mcq_import_67",
+      "layer": "网络层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_import_138",
+      "layer": "网络层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "A"
+    },
+    {
+      "id": "mcq_8529e64a",
+      "layer": "网络层",
+      "answer": "D",
+      "baseline": "C",
+      "system": "D"
+    },
+    {
+      "id": "mcq_import_50",
+      "layer": "网络层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_92230a1f",
+      "layer": "网络层",
+      "answer": "D",
+      "baseline": "D",
+      "system": "D"
+    },
+    {
+      "id": "mcq_3e89832d",
+      "layer": "网络层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_import_61",
+      "layer": "网络层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "D"
+    },
+    {
+      "id": "mcq_import_45",
+      "layer": "网络层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_d9c2cfd7",
+      "layer": "网络层",
+      "answer": "D",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_import_49",
+      "layer": "网络层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_9b709d58",
+      "layer": "传输层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_import_151",
+      "layer": "传输层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_import_84",
+      "layer": "传输层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "D"
+    },
+    {
+      "id": "mcq_4fbcaf39",
+      "layer": "传输层",
+      "answer": "B",
+      "baseline": "D",
+      "system": "D"
+    },
+    {
+      "id": "mcq_84824df3",
+      "layer": "传输层",
+      "answer": "D",
+      "baseline": "D",
+      "system": "D"
+    },
+    {
+      "id": "mcq_0a6bb087",
+      "layer": "传输层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "D"
+    },
+    {
+      "id": "mcq_import_76",
+      "layer": "传输层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_b503e046",
+      "layer": "传输层",
+      "answer": "C",
+      "baseline": "B",
+      "system": "C"
+    },
+    {
+      "id": "mcq_435fdf2b",
+      "layer": "传输层",
+      "answer": "A",
+      "baseline": "B",
+      "system": "D"
+    },
+    {
+      "id": "mcq_import_154",
+      "layer": "传输层",
+      "answer": "A",
+      "baseline": "A",
+      "system": "A"
+    },
+    {
+      "id": "mcq_import_169",
+      "layer": "应用层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_import_100",
+      "layer": "应用层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_import_171",
+      "layer": "应用层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_import_102",
+      "layer": "应用层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_import_172",
+      "layer": "应用层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "C"
+    },
+    {
+      "id": "mcq_2cc55991",
+      "layer": "应用层",
+      "answer": "A",
+      "baseline": "A",
+      "system": "A"
+    },
+    {
+      "id": "mcq_f0a216b8",
+      "layer": "应用层",
+      "answer": "C",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_import_110",
+      "layer": "应用层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    },
+    {
+      "id": "mcq_import_178",
+      "layer": "应用层",
+      "answer": "C",
+      "baseline": "C",
+      "system": "C"
+    },
+    {
+      "id": "mcq_import_95",
+      "layer": "应用层",
+      "answer": "B",
+      "baseline": "B",
+      "system": "B"
+    }
+  ],
+  "detail_qa": [
+    {
+      "id": "app_q6",
+      "layer": "应用层",
+      "question": "HTTP的GET和POST请求有什么区别？",
+      "gt_entities": [
+        "RESTful API",
+        "HTTP",
+        "HTTP方法"
+      ],
+      "baseline_coverage": 0.3333,
+      "system_coverage": 0.3333,
+      "system_retrieval_hit": 1.0,
+      "judge": "tie",
+      "judge_reason": "两份回答在准确性、知识覆盖度、结构清晰度和教学适用性上表现相当。"
+    },
+    {
+      "id": "net_ext_q16",
+      "layer": "网络层",
+      "question": "什么是IGMP？IGMPv1、v2、v3有什么区别？",
+      "gt_entities": [
+        "组播",
+        "IGMP"
+      ],
+      "baseline_coverage": 1.0,
+      "system_coverage": 1.0,
+      "system_retrieval_hit": 1.0,
+      "judge": "tie",
+      "judge_reason": "两份回答在准确性、知识覆盖度、结构清晰度和教学适用性上表现相当"
+    },
+    {
+      "id": "app_q35",
+      "layer": "应用层",
+      "question": "什么是反向代理？与正向代理有什么区别？",
+      "gt_entities": [
+        "CDN与缓存策略",
+        "TLS",
+        "HTTP",
+        "负载均衡",
+        "反向代理"
+      ],
+      "baseline_coverage": 0.6,
+      "system_coverage": 0.4,
+      "system_retrieval_hit": 0.0,
+      "judge": "tie",
+      "judge_reason": "两份回答在准确性、知识覆盖度、结构清晰度和教学适用性上表现相当。"
+    },
+    {
+      "id": "dll_q10",
+      "layer": "数据链路层",
+      "question": "STP、RSTP和MSTP有什么区别？",
+      "gt_entities": [
+        "VLAN",
+        "MSTP",
+        "RSTP",
+        "STP"
+      ],
+      "baseline_coverage": 1.0,
+      "system_coverage": 1.0,
+      "system_retrieval_hit": 1.0,
+      "judge": "tie",
+      "judge_reason": "两份回答都准确、全面地解释了STP、RSTP和MSTP的区别，结构清晰，但A的表格更简洁，B的例子更详细，难以分出优劣。"
+    },
+    {
+      "id": "dll_q4",
+      "layer": "数据链路层",
+      "question": "VLAN的作用和实现原理是什么？",
+      "gt_entities": [
+        "帧",
+        "交换机",
+        "VLAN"
+      ],
+      "baseline_coverage": 1.0,
+      "system_coverage": 1.0,
+      "system_retrieval_hit": 0.6667,
+      "judge": "tie",
+      "judge_reason": "两份回答在准确性、知识覆盖度、结构清晰度和教学适用性上表现相当，都详细解释了VLAN的作用和实现原理。"
+    },
+    {
+      "id": "dll_q6",
+      "layer": "数据链路层",
+      "question": "三种ARQ协议(停止等待、后退N帧、选择重传)有什么区别？",
+      "gt_entities": [
+        "选择重传协议",
+        "后退N帧协议",
+        "停止等待协议"
+      ],
+      "baseline_coverage": 0.0,
+      "system_coverage": 1.0,
+      "system_retrieval_hit": 1.0,
+      "judge": "tie",
+      "judge_reason": "两份回答都准确、全面地描述了三种ARQ协议的区别，结构清晰，但A的总结更简洁。"
+    },
+    {
+      "id": "net_ext_q22",
+      "layer": "网络层",
+      "question": "GRE隧道协议的工作原理是什么？与IPSec有什么关系？",
+      "gt_entities": [
+        "NAT",
+        "IP",
+        "IPSec",
+        "GRE"
+      ],
+      "baseline_coverage": 0.75,
+      "system_coverage": 0.75,
+      "system_retrieval_hit": 1.0,
+      "judge": "tie",
+      "judge_reason": "两份回答在准确性、知识覆盖度、结构清晰度和教学适用性上表现相当。"
+    },
+    {
+      "id": "phy_q25",
+      "layer": "物理层",
+      "question": "EPON和GPON有什么区别？它们各自的特点是什么？",
+      "gt_entities": [
+        "FTTx",
+        "无源光网络",
+        "GPON",
+        "EPON"
+      ],
+      "baseline_coverage": 0.75,
+      "system_coverage": 1.0,
+      "system_retrieval_hit": 1.0,
+      "judge": "tie",
+      "judge_reason": "两份回答都准确、全面地介绍了EPON和GPON的区别和特点，结构清晰，但A在总结部分更强调应用选择，B在技术参数对比上更详细，两者各有优劣，难以简单判定优劣。"
+    },
+    {
+      "id": "dll_q19",
+      "layer": "数据链路层",
+      "question": "PPP协议如何实现透明传输？字节填充和零比特填充有什么区别？",
+      "gt_entities": [
+        "PPP",
+        "零比特填充",
+        "字节填充",
+        "透明传输"
+      ],
+      "baseline_coverage": 1.0,
+      "system_coverage": 1.0,
+      "system_retrieval_hit": 1.0,
+      "judge": "tie",
+      "judge_reason": "两份回答在准确性、知识覆盖度、结构清晰度和教学适用性上表现相当"
+    },
+    {
+      "id": "net_q4",
+      "layer": "网络层",
+      "question": "如何进行子网划分？举例说明。",
+      "gt_entities": [
+        "IP地址",
+        "CIDR",
+        "子网掩码",
+        "子网划分"
+      ],
+      "baseline_coverage": 0.5,
+      "system_coverage": 1.0,
+      "system_retrieval_hit": 0.75,
+      "judge": "tie",
+      "judge_reason": "两份回答在准确性、知识覆盖度、结构清晰度和教学适用性上表现相当。"
+    },
+    {
+      "id": "dll_q25",
+      "layer": "数据链路层",
+      "question": "以太网的信道利用率由什么决定？参数a的意义是什么？",
+      "gt_entities": [
+        "Ethernet",
+        "CSMA/CD",
+        "争用期",
+        "以太网信道利用率"
+      ],
+      "baseline_coverage": 0.25,
+      "system_coverage": 0.25,
+      "system_retrieval_hit": 0.75,
+      "judge": "tie",
+      "judge_reason": "两份回答都较为准确，但回答A更全面地解释了影响信道利用率的多个因素，而回答B则更侧重于理论计算和交换式以太网的特性。"
+    },
+    {
+      "id": "app_q15",
+      "layer": "应用层",
+      "question": "WebSocket与HTTP有什么区别？WebSocket是如何建立连接的？",
+      "gt_entities": [
+        "HTTP",
+        "WebSocket"
+      ],
+      "baseline_coverage": 1.0,
+      "system_coverage": 1.0,
+      "system_retrieval_hit": 0.5,
+      "judge": "tie",
+      "judge_reason": "回答B在结构清晰度和知识覆盖度上更优，但回答A也较为完整。"
+    },
+    {
+      "id": "dll_q21",
+      "layer": "数据链路层",
+      "question": "以太网交换机是如何实现自学习的？为什么冗余链路会导致帧兜圈子？",
+      "gt_entities": [
+        "STP",
+        "交换机",
+        "交换机环路",
+        "交换机自学习"
+      ],
+      "baseline_coverage": 0.75,
+      "system_coverage": 0.5,
+      "system_retrieval_hit": 0.75,
+      "judge": "tie",
+      "judge_reason": "两份回答都准确覆盖了问题核心，但回答A更详细和结构化"
+    },
+    {
+      "id": "app_q27",
+      "layer": "应用层",
+      "question": "什么是VPN？有哪些类型？常用的VPN协议有哪些？",
+      "gt_entities": [
+        "RADIUS协议",
+        "TLS",
+        "IPSec",
+        "VPN"
+      ],
+      "baseline_coverage": 0.5,
+      "system_coverage": 0.75,
+      "system_retrieval_hit": 0.0,
+      "judge": "tie",
+      "judge_reason": "回答A更全面，结构更清晰，知识覆盖度更高。"
+    },
+    {
+      "id": "phy_q2",
+      "layer": "物理层",
+      "question": "奈奎斯特定理和香农定理分别适用于什么场景？如何综合运用？",
+      "gt_entities": [
+        "信噪比",
+        "带宽",
+        "香农定理",
+        "奈奎斯特定理"
+      ],
+      "baseline_coverage": 1.0,
+      "system_coverage": 1.0,
+      "system_retrieval_hit": 1.0,
+      "judge": "tie",
+      "judge_reason": "两份回答在准确性、知识覆盖度、结构清晰度和教学适用性上表现相当，都详细解释了奈奎斯特定理和香农定理的内容、适用场景和综合运用方法。"
+    },
+    {
+      "id": "phy_q20",
+      "layer": "物理层",
+      "question": "物理层接口的四大特性是什么？分别举例说明。",
+      "gt_entities": [
+        "RS-232",
+        "DCE",
+        "DTE",
+        "物理层接口特性"
+      ],
+      "baseline_coverage": 0.0,
+      "system_coverage": 0.75,
+      "system_retrieval_hit": 0.5,
+      "judge": "tie",
+      "judge_reason": "两份回答在准确性、知识覆盖度、结构清晰度和教学适用性上表现相当，都详细解释了物理层接口的四大特性并举例说明，但回答A在举例方面稍显丰富。"
+    },
+    {
+      "id": "app_q34",
+      "layer": "应用层",
+      "question": "负载均衡有哪些类型和算法？L4和L7负载均衡有什么区别？",
+      "gt_entities": [
+        "HTTPS",
+        "HTTP",
+        "负载均衡"
+      ],
+      "baseline_coverage": 1.0,
+      "system_coverage": 1.0,
+      "system_retrieval_hit": 0.0,
+      "judge": "tie",
+      "judge_reason": "回答A更全面，回答B更详细"
+    },
+    {
+      "id": "app_q24",
+      "layer": "应用层",
+      "question": "什么是JWT？由哪几部分组成？与Session有什么区别？",
+      "gt_entities": [
+        "Session",
+        "HTTP头部",
+        "OAuth 2.0",
+        "JWT"
+      ],
+      "baseline_coverage": 0.75,
+      "system_coverage": 0.5,
+      "system_retrieval_hit": 0.0,
+      "judge": "tie",
+      "judge_reason": "回答A更详细，结构更清晰，提供了更多细节和示例。"
+    },
+    {
+      "id": "app_q14",
+      "layer": "应用层",
+      "question": "CDN是什么？HTTP缓存策略中的强缓存和协商缓存有什么区别？",
+      "gt_entities": [
+        "HTTP",
+        "HTTP头部",
+        "CDN与缓存策略"
+      ],
+      "baseline_coverage": 0.3333,
+      "system_coverage": 0.3333,
+      "system_retrieval_hit": 0.0,
+      "judge": "tie",
+      "judge_reason": "两份回答在准确性、知识覆盖度、结构清晰度和教学适用性上表现相当，都详细解释了CDN和HTTP缓存策略，但回答A在结构上更清晰，内容更丰富。"
+    },
+    {
+      "id": "dll_q18",
+      "layer": "数据链路层",
+      "question": "数据链路层的三个基本问题是什么？各自如何解决？",
+      "gt_entities": [
+        "零比特填充",
+        "字节填充",
+        "CRC校验",
+        "透明传输",
+        "封装成帧"
+      ],
+      "baseline_coverage": 0.4,
+      "system_coverage": 0.8,
+      "system_retrieval_hit": 1.0,
+      "judge": "tie",
+      "judge_reason": "两份回答都准确覆盖了数据链路层的三个基本问题，并提供了相应的解决方案，但在知识覆盖度和结构清晰度上略有差异，难以简单判定优劣。"
+    }
+  ],
+  "meta": {
+    "timestamp": "2026-09-23 21:30:00",
+    "mcq_per_layer": 10,
+    "mcq_total": 50,
+    "qa_count": 20,
+    "baseline_model": "glm-4-flash-250414",
+    "judge_model": "glm-4-flash-250414",
+    "seed": 42,
+    "layers": [
+      "物理层",
+      "数据链路层",
+      "网络层",
+      "传输层",
+      "应用层"
+    ]
+  }
+}

@@ -282,3 +282,148 @@ class TestMigration:
             assert row[0] is not None
         finally:
             t.close()
+
+
+class TestAnswerFeedback:
+    def test_record_and_stats(self, tracker):
+        tracker.record_feedback(SID, rating=1, question="TCP 三次握手")
+        tracker.record_feedback(SID, rating=1)
+        tracker.record_feedback(SID, rating=0, question="UDP")
+
+        stats = tracker.get_feedback_stats(SID)
+        assert stats["total"] == 3
+        assert stats["positive"] == 2
+        assert stats["negative"] == 1
+        assert stats["satisfaction_rate"] == pytest.approx(0.6667, abs=0.0001)
+        assert len(stats["by_day"]) == 1
+
+    def test_invalid_rating_raises(self, tracker):
+        with pytest.raises(ValueError):
+            tracker.record_feedback(SID, rating=2)
+
+    def test_global_stats_aggregate_sessions(self, tracker):
+        tracker.record_feedback("s1", rating=1)
+        tracker.record_feedback("s2", rating=0)
+
+        stats = tracker.get_feedback_stats()
+        assert stats["total"] == 2
+        assert stats["positive"] == 1
+        assert stats["satisfaction_rate"] == 0.5
+
+    def test_empty_stats(self, tracker):
+        stats = tracker.get_feedback_stats("nobody")
+        assert stats["total"] == 0
+        assert stats["satisfaction_rate"] == 0.0
+        assert stats["by_day"] == []
+
+
+class TestTrialTables:
+    def test_tables_auto_created(self, tmp_path):
+        t = MasteryTracker(db_path=str(tmp_path / "mastery.db"))
+        names = {
+            r[0]
+            for r in t.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        t.close()
+        assert {"trials", "trial_participants", "trial_tests"} <= names
+
+    def test_save_and_get_trial(self, tracker):
+        config = {"per_layer": 4, "seed": 42, "pre_ids": ["a"], "post_ids": ["b"]}
+        tracker.save_trial("tr-1", "第一批试用", config)
+
+        got = tracker.get_trial("tr-1")
+        assert got["name"] == "第一批试用"
+        assert got["config"] == config
+        assert got["status"] == "active"
+        assert tracker.get_trial("nope") is None
+
+        trials = tracker.list_trials()
+        assert len(trials) == 1
+        assert trials[0]["participant_count"] == 0
+
+    def test_add_participant_duplicate_rejected(self, tracker):
+        tracker.save_trial("tr-1", "t", {})
+        p = tracker.add_trial_participant("tr-1", "P0001")
+        assert p["id"] == 1 and p["code"] == "P0001"
+
+        with pytest.raises(ValueError):
+            tracker.add_trial_participant("tr-1", "P0001")
+        # 不同批次允许同码
+        tracker.save_trial("tr-2", "t2", {})
+        assert tracker.add_trial_participant("tr-2", "P0001")["id"] == 2
+
+    def test_bind_session_and_lookup_by_code(self, tracker):
+        tracker.save_trial("tr-1", "t", {})
+        pid = tracker.add_trial_participant("tr-1", "P0001")["id"]
+
+        assert tracker.get_participant_by_code("P0001")["id"] == pid
+        assert tracker.get_participant_by_code("PXXXX") is None
+
+        tracker.bind_participant_session(pid, "sess-9")
+        found = tracker.get_participant_by_code("P0001")
+        assert found["session_id"] == "sess-9"
+        assert tracker.get_participant(pid)["session_id"] == "sess-9"
+
+    def test_upsert_trial_test_idempotent_until_submitted(self, tracker):
+        tracker.save_trial("tr-1", "t", {})
+        pid = tracker.add_trial_participant("tr-1", "P0001")["id"]
+
+        first = tracker.upsert_trial_test("tr-1", pid, "pre", ["q1", "q2"])
+        second = tracker.upsert_trial_test("tr-1", pid, "pre", ["q1", "q2"])
+        assert first["test_id"] == second["test_id"]
+
+        tracker.save_trial_test_submit(first["test_id"], {"q1": "A"}, 1, 2, [])
+        with pytest.raises(ValueError, match="已提交"):
+            tracker.upsert_trial_test("tr-1", pid, "pre", ["q1", "q2"])
+
+    def test_submit_persists_and_blocks_resubmit(self, tracker):
+        tracker.save_trial("tr-1", "t", {})
+        pid = tracker.add_trial_participant("tr-1", "P0001")["id"]
+        test_id = tracker.upsert_trial_test("tr-1", pid, "post", ["q1", "q2", "q3"])["test_id"]
+
+        details = [{"question_id": "q1", "correct": True}]
+        result = tracker.save_trial_test_submit(
+            test_id, {"q1": "A", "q2": "B"}, 2, 3, details
+        )
+        assert result == {"test_id": test_id, "correct_count": 2, "total_count": 3}
+
+        stored = tracker.get_trial_test(test_id)
+        assert stored["submitted_at"] is not None
+        assert stored["correct_count"] == 2
+        assert stored["details"] == details
+
+        with pytest.raises(ValueError, match="已提交"):
+            tracker.save_trial_test_submit(test_id, {}, 0, 3, [])
+        with pytest.raises(ValueError):
+            tracker.save_trial_test_submit(9999, {}, 0, 0, [])
+
+    def test_list_participants_marks_completion(self, tracker):
+        tracker.save_trial("tr-1", "t", {})
+        p1 = tracker.add_trial_participant("tr-1", "P0001")["id"]
+        tracker.add_trial_participant("tr-1", "P0002")
+
+        pre = tracker.upsert_trial_test("tr-1", p1, "pre", ["q1"])["test_id"]
+        tracker.save_trial_test_submit(pre, {"q1": "A"}, 1, 1, [])
+        post = tracker.upsert_trial_test("tr-1", p1, "post", ["q2"])["test_id"]
+        tracker.upsert_trial_test("tr-1", p1, "post", ["q2"])  # 幂等
+
+        participants = tracker.list_participants("tr-1")
+        by_code = {p["code"]: p for p in participants}
+        assert by_code["P0001"]["pre_done"] is True
+        assert by_code["P0001"]["post_done"] is False  # 已开始未提交
+        assert by_code["P0002"]["pre_done"] is False
+
+        assert len(tracker.get_trial_tests("tr-1")) == 2
+
+    def test_review_behavior_aggregates(self, tracker):
+        tracker.record_review(SID, "TCP", quality=4, event_type="quiz_correct")
+        tracker.record_review(SID, "UDP", quality=4, event_type="quiz_correct")
+        tracker.record_review(SID, "TCP", quality=1, event_type="quiz_wrong")
+
+        behavior = tracker.get_review_behavior(SID)
+        assert behavior["total_events"] == 3
+        assert behavior["total_entities"] == 2
+        assert behavior["by_type"]["quiz_correct"]["count"] == 2
+        assert behavior["by_type"]["quiz_wrong"]["count"] == 1

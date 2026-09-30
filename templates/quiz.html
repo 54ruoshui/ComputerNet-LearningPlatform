@@ -60,6 +60,10 @@
                     <span class="current-label" id="currentChapterLabel">全部题目</span>
                 </div>
                 <div class="topbar-right">
+                    <a href="/trial" class="topbar-btn">
+                        <i class="fas fa-clipboard-check"></i>
+                        <span>试用</span>
+                    </a>
                     <a href="/review" class="topbar-btn">
                         <i class="fas fa-brain"></i>
                         <span>复习</span>
@@ -181,6 +185,52 @@
                         <button class="btn-start" onclick="resetQuiz()">
                             <i class="fas fa-rotate"></i> 再来一轮
                         </button>
+                    </div>
+
+                    <!-- AI 生成题目 -->
+                    <div class="quiz-form-section">
+                        <button class="form-toggle" onclick="toggleAiForm()">
+                            <i class="fas fa-wand-magic-sparkles"></i> AI 生成题目
+                            <i class="fas fa-chevron-down form-toggle-arrow" id="aiFormToggleArrow"></i>
+                        </button>
+                        <div class="quiz-form" id="aiForm">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>所属层次</label>
+                                    <select id="aiLayer">
+                                        <option value="">自动（按种子）</option>
+                                        <option>物理层</option>
+                                        <option>数据链路层</option>
+                                        <option>网络层</option>
+                                        <option>传输层</option>
+                                        <option>应用层</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>难度</label>
+                                    <select id="aiDiff">
+                                        <option value="">混合</option>
+                                        <option value="basic">基础</option>
+                                        <option value="medium">中等</option>
+                                        <option value="hard">困难</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>数量（1-10）</label>
+                                    <input id="aiCount" type="number" value="5" min="1" max="10">
+                                </div>
+                                <div class="form-group">
+                                    <label>种子实体（可选，逗号分隔）</label>
+                                    <input id="aiSeeds" placeholder="例如：TCP, UDP, 三次握手">
+                                </div>
+                            </div>
+                            <button class="btn-add" id="aiGenerateBtn" onclick="generateAiQuestions()">
+                                <i class="fas fa-wand-magic-sparkles"></i> 生成题目
+                            </button>
+                            <div id="aiPreview"></div>
+                        </div>
                     </div>
 
                     <!-- 添加题目 -->

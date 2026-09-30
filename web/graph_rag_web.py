@@ -58,6 +58,8 @@ mastery_service = None
 quiz_service = None
 exam_service = None
 dashboard_service = None
+question_generator = None
+trial_service = None
 
 
 # ==================== Pydantic 请求模型（带校验） ====================
@@ -93,6 +95,21 @@ class QuizAnswerRequest(BaseModel):
     session_id: Optional[str] = None
 
 
+class FeedbackRequest(BaseModel):
+    session_id: Optional[str] = Field(default=None, max_length=200)
+    question: str = Field(default="", max_length=2000, description="被评价的提问文本")
+    rating: int = Field(..., ge=0, le=1, description="1=满意 / 0=不满意")
+    comment: str = Field(default="", max_length=500)
+
+
+class QuizGenerateRequest(BaseModel):
+    layer: Optional[str] = Field(default=None, pattern="^(物理层|数据链路层|网络层|传输层|应用层)$")
+    chapter: Optional[str] = Field(default=None, max_length=10)
+    difficulty: Optional[str] = Field(default=None, pattern="^(basic|medium|hard)$")
+    count: int = Field(default=5, ge=1, le=10)
+    seed_entities: Optional[List[str]] = Field(default=None, max_length=10)
+
+
 
 class ExamSubmitRequest(BaseModel):
     session_id: str = Field(..., min_length=1, max_length=200)
@@ -118,6 +135,33 @@ class MCQuestionCreate(BaseModel):
     difficulty: str = Field(..., pattern="^(basic|medium|hard)$")
     layer: str = Field(..., pattern="^(物理层|数据链路层|网络层|传输层|应用层)$")
     references: Optional[List[str]] = []
+    source: str = Field(default="manual", pattern="^(manual|ai)$",
+                        description="题目来源：手动添加或 AI 生成")
+
+
+class TrialCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="试用批次名称")
+    per_layer: int = Field(default=4, ge=2, le=10, description="每层抽取题量（前测/后测各 per_layer 题）")
+    seed: Optional[int] = Field(default=None, ge=0, le=999999, description="随机种子，固定则平行卷可复现")
+
+
+class TrialParticipantRequest(BaseModel):
+    code: Optional[str] = Field(default=None, min_length=2, max_length=20, description="被试码，缺省自动生成")
+
+
+class TrialJoinRequest(BaseModel):
+    code: str = Field(..., min_length=2, max_length=20, description="被试码")
+    session_id: str = Field(..., min_length=1, max_length=200, description="学习会话 ID")
+
+
+class TrialTestStartRequest(BaseModel):
+    code: str = Field(..., min_length=2, max_length=20, description="被试码")
+    phase: str = Field(..., pattern="^(pre|post)$", description="pre=前测 / post=后测")
+
+
+class TrialTestSubmitRequest(BaseModel):
+    test_id: int = Field(..., ge=1)
+    answers: Dict[str, str] = Field(..., description="题目ID→答案映射，如 {'q1': 'A'}")
 
 
 # ==================== 全局异常处理 ====================
@@ -223,6 +267,27 @@ def init_quiz_service():
         quiz_service = None
 
 
+def init_question_generator():
+    global question_generator
+    try:
+        from src.services.question_generator import QuestionGenerator
+        driver = None
+        if langgraph_engine and hasattr(langgraph_engine, "driver"):
+            driver = langgraph_engine.driver
+        else:
+            from neo4j import GraphDatabase
+            s = get_settings()
+            driver = GraphDatabase.driver(
+                s.neo4j_uri,
+                auth=(s.neo4j_user, s.neo4j_password),
+            )
+        question_generator = QuestionGenerator(driver)
+        logger.info("QuestionGenerator 初始化完成")
+    except Exception as e:
+        logger.error("QuestionGenerator 初始化失败", error=str(e))
+        question_generator = None
+
+
 def init_exam_service():
     global exam_service
     try:
@@ -271,6 +336,33 @@ def init_dashboard_service():
         dashboard_service = None
 
 
+def init_trial_service():
+    global trial_service
+    try:
+        from src.services.trial_service import TrialService
+        driver = None
+        if langgraph_engine and hasattr(langgraph_engine, "driver"):
+            driver = langgraph_engine.driver
+        else:
+            from neo4j import GraphDatabase
+            s = get_settings()
+            driver = GraphDatabase.driver(
+                s.neo4j_uri,
+                auth=(s.neo4j_user, s.neo4j_password),
+            )
+        tracker = None
+        if mastery_service and mastery_service.available:
+            tracker = mastery_service._tracker
+        if tracker is None:
+            # TrialService 的全部功能依赖 SQLite 存储，无 tracker 视为初始化失败
+            raise RuntimeError("MasteryTracker 不可用，TrialService 无法初始化")
+        trial_service = TrialService(driver, tracker)
+        logger.info("TrialService 初始化完成")
+    except Exception as e:
+        logger.error("TrialService 初始化失败", error=str(e))
+        trial_service = None
+
+
 def _require_engine():
     if not langgraph_engine:
         raise HTTPException(status_code=503, detail="LangGraph 引擎未初始化，请检查 Neo4j 和 API 配置")
@@ -290,8 +382,10 @@ def on_startup():
         init_image_generator()
         init_mastery_tracker()
         init_quiz_service()
+        init_question_generator()
         init_exam_service()
         init_dashboard_service()
+        init_trial_service()
     else:
         logger.info("快速启动模式：系统将在首次查询时初始化")
 
@@ -584,6 +678,11 @@ async def dashboard_page(request: Request):
     return templates.TemplateResponse(request, "dashboard.html")
 
 
+@app.get("/trial", response_class=HTMLResponse)
+async def trial_page(request: Request):
+    return templates.TemplateResponse(request, "trial.html")
+
+
 @app.get("/api/quiz/questions")
 async def get_quiz_questions(
     layer: Optional[str] = None,
@@ -690,6 +789,33 @@ async def create_quiz_question(req: MCQuestionCreate):
         return {"success": True, "question_id": q_id}
     except Exception as e:
         logger.error("创建题目失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/quiz/generate")
+async def generate_quiz_questions(req: QuizGenerateRequest):
+    global question_generator
+    if not question_generator:
+        if langgraph_engine:
+            init_question_generator()
+        if not question_generator:
+            raise HTTPException(status_code=503, detail="习题生成服务未初始化")
+    try:
+        # LLM 生成耗时 5-20s，放线程池避免阻塞事件循环
+        result = await asyncio.to_thread(
+            question_generator.generate,
+            layer=req.layer,
+            chapter=req.chapter,
+            difficulty=req.difficulty,
+            count=req.count,
+            seed_entities=req.seed_entities,
+        )
+        return result
+    except GraphRAGError as e:
+        logger.error("生成题目失败", error=e.message, detail=e.detail)
+        raise HTTPException(status_code=500, detail=e.detail or e.message)
+    except Exception as e:
+        logger.error("生成题目失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -896,6 +1022,33 @@ async def get_review_stats(session_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== 答案满意度反馈 API ====================
+
+@app.post("/api/feedback")
+async def submit_feedback(req: FeedbackRequest):
+    if not mastery_service or not mastery_service.available:
+        raise HTTPException(status_code=503, detail="反馈服务未初始化")
+    try:
+        row_id = mastery_service.record_feedback(
+            req.session_id or "", req.rating, req.question, req.comment
+        )
+        return {"success": True, "id": row_id}
+    except Exception as e:
+        logger.error("保存反馈失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/feedback/stats")
+async def get_feedback_stats(session_id: Optional[str] = None):
+    if not mastery_service or not mastery_service.available:
+        raise HTTPException(status_code=503, detail="反馈服务未初始化")
+    try:
+        return mastery_service.get_feedback_stats(session_id)
+    except Exception as e:
+        logger.error("获取反馈统计失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== 学习仪表盘 API ====================
 
 @app.get("/api/dashboard/overview/{session_id}")
@@ -973,6 +1126,140 @@ async def api_remove_wrong(question_id: str):
 async def api_clear_wrong():
     quiz_storage.clear_wrong()
     return {"success": True}
+
+
+# ==================== 前测-后测试用评估 API ====================
+
+def _ensure_trial_service():
+    global trial_service
+    if not trial_service:
+        if langgraph_engine:
+            init_trial_service()
+        if not trial_service:
+            raise HTTPException(status_code=503, detail="Trial 服务未初始化")
+    return trial_service
+
+
+@app.post("/api/trial/create")
+async def create_trial(req: TrialCreateRequest):
+    try:
+        service = _ensure_trial_service()
+        return service.create_trial(req.name, per_layer=req.per_layer, seed=req.seed)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("创建试用批次失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trial/list")
+async def list_trials():
+    try:
+        return {"trials": _ensure_trial_service().list_trials()}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("获取试用批次列表失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trial/{trial_id}/participants")
+async def add_trial_participant(trial_id: str, req: TrialParticipantRequest):
+    try:
+        participant = _ensure_trial_service().add_participant(trial_id, req.code)
+        return participant
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("登记被试失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trial/{trial_id}/participants")
+async def list_trial_participants(trial_id: str):
+    try:
+        return {"participants": _ensure_trial_service().list_participants(trial_id)}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("获取被试列表失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trial/join")
+async def join_trial(req: TrialJoinRequest):
+    try:
+        return _ensure_trial_service().join(req.code, req.session_id)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("被试加入失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trial/test/start")
+async def start_trial_test(req: TrialTestStartRequest):
+    try:
+        return _ensure_trial_service().start_test(req.code, req.phase)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("开始测试失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trial/test/submit")
+async def submit_trial_test(req: TrialTestSubmitRequest):
+    try:
+        return _ensure_trial_service().submit_test(req.test_id, req.answers)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("提交测试失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trial/{trial_id}/analysis")
+async def get_trial_analysis(trial_id: str):
+    try:
+        return _ensure_trial_service().get_analysis(trial_id)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("获取试用分析失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trial/{trial_id}/report")
+async def generate_trial_report(trial_id: str):
+    try:
+        report = _ensure_trial_service().generate_report(trial_id)
+        if report is None:
+            raise HTTPException(status_code=502, detail="报告生成失败，请稍后重试")
+        return {"trial_id": trial_id, "report": report}
+    except HTTPException:
+        raise
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("生成试用评估报告失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ==================== 启动入口 ====================
