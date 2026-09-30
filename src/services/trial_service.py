@@ -69,14 +69,17 @@ class TrialService:
         }
 
     def _fetch_layer_pools(self) -> Dict[str, List[str]]:
-        pools: Dict[str, List[str]] = {}
+        pools: Dict[str, List[str]] = {layer: [] for layer in MCQ_LAYERS}
         with self._driver.session() as session:
-            for layer in MCQ_LAYERS:
-                result = session.run(
-                    "MATCH (q:MCQuestion) WHERE q.layer = $layer RETURN q.id AS id",
-                    layer=layer,
-                )
-                pools[layer] = [record["id"] for record in result]
+            result = session.run(
+                """
+                MATCH (q:MCQuestion) WHERE q.layer IN $layers
+                RETURN q.layer AS layer, collect(q.id) AS ids
+                """,
+                layers=list(MCQ_LAYERS),
+            )
+            for record in result:
+                pools[record["layer"]] = record["ids"]
         return pools
 
     def list_trials(self) -> list:

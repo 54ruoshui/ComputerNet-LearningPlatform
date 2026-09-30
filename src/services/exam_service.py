@@ -106,6 +106,22 @@ class ExamService:
         paper_id = f"exam_{uuid.uuid4().hex[:8]}"
         questions_data = data.pop("questions", [])
 
+        # q_id 缺省生成在 Python 侧完成，便于逐题引用
+        prepared = []
+        for q in questions_data:
+            prepared.append({
+                "id": q.get("id", f"mcq_{uuid.uuid4().hex[:8]}"),
+                "text": q["text"],
+                "option_a": q["option_a"], "option_b": q["option_b"],
+                "option_c": q["option_c"], "option_d": q["option_d"],
+                "correct_answer": q["correct_answer"], "explanation": q["explanation"],
+                "difficulty": q["difficulty"], "layer": q["layer"],
+                "chapter": q.get("chapter", ""),
+                "score": q.get("score", 0),
+                "question_number": q.get("question_number", 0),
+                "references": [r.strip() for r in q.get("references", []) if r and r.strip()],
+            })
+
         with self._driver.session() as session:
             session.run(
                 """
@@ -124,51 +140,50 @@ class ExamService:
                 description=data.get("description", ""),
             )
 
-            for q in questions_data:
-                q_id = q.get("id", f"mcq_{uuid.uuid4().hex[:8]}")
-                qn = q.get("question_number", 0)
-                score = q.get("score", 0)
+            session.run(
+                """
+                UNWIND $questions AS q
+                MERGE (n:MCQuestion {id: q.id})
+                SET n.text = q.text,
+                    n.option_a = q.option_a, n.option_b = q.option_b,
+                    n.option_c = q.option_c, n.option_d = q.option_d,
+                    n.correct_answer = q.correct_answer,
+                    n.explanation = q.explanation,
+                    n.difficulty = q.difficulty,
+                    n.layer = q.layer,
+                    n.chapter = q.chapter,
+                    n.score = q.score,
+                    n.question_number = q.question_number
+                """,
+                questions=prepared,
+            )
+
+            session.run(
+                """
+                MATCH (p:ExamPaper {id: $paper_id})
+                UNWIND $questions AS q
+                MATCH (n:MCQuestion {id: q.id})
+                MERGE (p)-[:CONTAINS {question_number: q.question_number}]->(n)
+                """,
+                paper_id=paper_id,
+                questions=prepared,
+            )
+
+            refs = [
+                {"id": q["id"], "ref": ref}
+                for q in prepared
+                for ref in q["references"]
+            ]
+            if refs:
                 session.run(
                     """
-                    MERGE (q:MCQuestion {id: $id})
-                    SET q.text = $text,
-                        q.option_a = $option_a, q.option_b = $option_b,
-                        q.option_c = $option_c, q.option_d = $option_d,
-                        q.correct_answer = $correct_answer,
-                        q.explanation = $explanation,
-                        q.difficulty = $difficulty,
-                        q.layer = $layer,
-                        q.chapter = $chapter,
-                        q.score = $score,
-                        q.question_number = $question_number
+                    UNWIND $refs AS r
+                    MATCH (q:MCQuestion {id: r.id})
+                    MATCH (e {name: r.ref})
+                    MERGE (q)-[:ABOUT]->(e)
                     """,
-                    id=q_id, text=q["text"],
-                    option_a=q["option_a"], option_b=q["option_b"],
-                    option_c=q["option_c"], option_d=q["option_d"],
-                    correct_answer=q["correct_answer"], explanation=q["explanation"],
-                    difficulty=q["difficulty"], layer=q["layer"],
-                    chapter=q.get("chapter", ""), score=score,
-                    question_number=qn,
+                    refs=refs,
                 )
-
-                session.run(
-                    """
-                    MATCH (p:ExamPaper {id: $paper_id})
-                    MATCH (q:MCQuestion {id: $q_id})
-                    MERGE (p)-[:CONTAINS {question_number: $qn}]->(q)
-                    """,
-                    paper_id=paper_id, q_id=q_id, qn=qn,
-                )
-
-                for ref in q.get("references", []):
-                    session.run(
-                        """
-                        MATCH (q:MCQuestion {id: $id})
-                        MATCH (e {name: $ref})
-                        MERGE (q)-[:ABOUT]->(e)
-                        """,
-                        id=q_id, ref=ref.strip(),
-                    )
 
         return paper_id
 

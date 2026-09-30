@@ -170,28 +170,21 @@ class QuizService:
             }
 
     def get_stats(self) -> Dict:
+        total = 0
+        by_layer: Dict = {}
+        by_difficulty: Dict = {}
+        by_chapter: Dict = {}
         with self._driver.session() as session:
-            total = session.run(
-                "MATCH (q:MCQuestion) RETURN count(q) AS cnt"
-            ).single()["cnt"]
-
-            by_layer = {}
+            # 单次遍历取原始行，Python 侧按多维度聚合（避免多轮往返）
             for r in session.run(
-                "MATCH (q:MCQuestion) RETURN q.layer AS layer, count(q) AS cnt"
+                "MATCH (q:MCQuestion) RETURN q.layer AS layer, q.difficulty AS difficulty, q.chapter AS chapter"
             ):
-                by_layer[r["layer"]] = r["cnt"]
-
-            by_difficulty = {}
-            for r in session.run(
-                "MATCH (q:MCQuestion) RETURN q.difficulty AS difficulty, count(q) AS cnt"
-            ):
-                by_difficulty[r["difficulty"]] = r["cnt"]
-
-            by_chapter = {}
-            for r in session.run(
-                "MATCH (q:MCQuestion) WHERE q.chapter IS NOT NULL RETURN q.chapter AS chapter, count(q) AS cnt"
-            ):
-                by_chapter[r["chapter"]] = r["cnt"]
+                total += 1
+                by_layer[r["layer"]] = by_layer.get(r["layer"], 0) + 1
+                by_difficulty[r["difficulty"]] = by_difficulty.get(r["difficulty"], 0) + 1
+                chapter = r["chapter"]
+                if chapter is not None:
+                    by_chapter[chapter] = by_chapter.get(chapter, 0) + 1
 
         return {
             "total_questions": total,
@@ -242,15 +235,18 @@ class QuizService:
                 alias=LAYER_ALIASES.get(data["layer"], data["layer"]),
             )
 
-            for ref in data.get("references", []):
+            # 不带 label 的 MATCH 保持原语义：references 可指向 Entity 或 Layer
+            refs = [ref.strip() for ref in data.get("references", []) if ref and ref.strip()]
+            if refs:
                 session.run(
                     """
                     MATCH (q:MCQuestion {id: $id})
-                    MATCH (e {name: $ref})
+                    UNWIND $refs AS ref
+                    MATCH (e {name: ref})
                     MERGE (q)-[:ABOUT]->(e)
                     """,
                     id=q_id,
-                    ref=ref.strip(),
+                    refs=refs,
                 )
 
         return q_id

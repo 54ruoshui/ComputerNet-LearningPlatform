@@ -35,6 +35,15 @@ class FakeSession:
         self._bank = bank
 
     def run(self, query, **params):
+        if "q.layer IN $layers" in query:
+            grouped = {}
+            for qid, q in self._bank.items():
+                grouped.setdefault(q["layer"], []).append(qid)
+            return [
+                {"layer": layer, "ids": ids}
+                for layer, ids in grouped.items()
+                if layer in params["layers"]
+            ]
         if "q.layer = $layer" in query:
             layer = params["layer"]
             return [{"id": qid} for qid, q in self._bank.items() if q["layer"] == layer]
