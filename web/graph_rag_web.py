@@ -405,19 +405,19 @@ def on_shutdown():
 # ==================== 页面路由 ====================
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
+def index(request: Request):
     return templates.TemplateResponse(request, "integrated_index.html")
 
 
 @app.get("/favicon.ico")
-async def favicon():
+def favicon():
     return Response(status_code=204)
 
 
 # ==================== 核心查询 API ====================
 
 @app.post("/api/query")
-async def query(req: QueryRequest):
+def query(req: QueryRequest):
     engine = _require_engine()
     try:
         if req.session_id:
@@ -428,8 +428,7 @@ async def query(req: QueryRequest):
         if req.session_id and mastery_service:
             mastery_context = mastery_service.build_mastery_context(req.session_id)
 
-        response = await asyncio.to_thread(
-            engine.query,
+        response = engine.query(
             req.question,
             session_id=req.session_id,
             mastery_context=mastery_context,
@@ -473,7 +472,9 @@ async def query_stream(req: QueryRequest):
 
     mastery_context = ""
     if req.session_id and mastery_service:
-        mastery_context = mastery_service.build_mastery_context(req.session_id)
+        mastery_context = await asyncio.to_thread(
+            mastery_service.build_mastery_context, req.session_id
+        )
 
     return StreamingResponse(
         engine.query_stream(
@@ -493,7 +494,7 @@ async def query_stream(req: QueryRequest):
 # ==================== 会话记忆 API ====================
 
 @app.get("/api/sessions")
-async def list_sessions():
+def list_sessions():
     engine = _require_engine()
     try:
         sessions = engine.list_sessions()
@@ -515,21 +516,21 @@ async def list_sessions():
 
 
 @app.post("/api/sessions/new")
-async def new_session():
+def new_session():
     engine = _require_engine()
     session_id = engine.new_session()
     return {"session_id": session_id}
 
 
 @app.get("/api/sessions/{session_id}/history")
-async def session_history(session_id: str):
+def session_history(session_id: str):
     engine = _require_engine()
     history = engine.get_session_history(session_id)
     return {"session_id": session_id, "history": history}
 
 
 @app.delete("/api/sessions/{session_id}")
-async def delete_session(session_id: str):
+def delete_session(session_id: str):
     engine = _require_engine()
     success = engine.delete_session(session_id)
     if success:
@@ -540,7 +541,7 @@ async def delete_session(session_id: str):
 # ==================== 掌握状态 API ====================
 
 @app.get("/api/entities")
-async def get_all_entities():
+def get_all_entities():
     engine = _require_engine()
     try:
         return entity_service.get_entities_by_layer()
@@ -550,14 +551,14 @@ async def get_all_entities():
 
 
 @app.get("/api/mastery/{session_id}")
-async def get_mastery(session_id: str):
+def get_mastery(session_id: str):
     if not mastery_service or not mastery_service.available:
         raise HTTPException(status_code=503, detail="掌握追踪器未初始化")
     return mastery_service.get_mastery(session_id)
 
 
 @app.post("/api/mastery")
-async def set_mastery(req: MasteryRequest):
+def set_mastery(req: MasteryRequest):
     if not mastery_service or not mastery_service.available:
         raise HTTPException(status_code=503, detail="掌握追踪器未初始化")
     mastery_service.set_mastery(req.session_id, req.entity_name, req.mastered)
@@ -565,7 +566,7 @@ async def set_mastery(req: MasteryRequest):
 
 
 @app.post("/api/mastery/batch")
-async def set_mastery_batch(req: MasteryBatchRequest):
+def set_mastery_batch(req: MasteryBatchRequest):
     if not mastery_service or not mastery_service.available:
         raise HTTPException(status_code=503, detail="掌握追踪器未初始化")
     mastery_service.set_mastery_batch(req.session_id, req.entities)
@@ -591,7 +592,7 @@ async def get_config():
 
 
 @app.get("/api/graph_stats")
-async def graph_stats():
+def graph_stats():
     engine = _require_engine()
     try:
         return engine.stats_service.get_stats()
@@ -601,7 +602,7 @@ async def graph_stats():
 
 
 @app.get("/api/node_neighbors/{node_name}")
-async def node_neighbors(node_name: str):
+def node_neighbors(node_name: str):
     engine = _require_engine()
     try:
         neighbors = engine.entity_retriever.get_neighbors(node_name)
@@ -612,7 +613,7 @@ async def node_neighbors(node_name: str):
 
 
 @app.get("/api/search_nodes")
-async def search_nodes(q: str = ""):
+def search_nodes(q: str = ""):
     engine = _require_engine()
     try:
         nodes = engine.entity_retriever.keyword_search(q, limit=20) if q else []
@@ -623,7 +624,7 @@ async def search_nodes(q: str = ""):
 
 
 @app.post("/api/export_graph")
-async def export_graph(req: ExportRequest):
+def export_graph(req: ExportRequest):
     engine = _require_engine()
     try:
         graph_data = engine.entity_retriever.get_subgraph_by_query(req.query, limit=50)
@@ -643,7 +644,7 @@ async def health_check():
 
 
 @app.post("/api/generate_image")
-async def generate_image(req: GenerateImageRequest):
+def generate_image(req: GenerateImageRequest):
     global image_generator
     if not image_generator:
         image_generator = init_image_generator()
@@ -664,27 +665,27 @@ async def generate_image(req: GenerateImageRequest):
 # ==================== 刷题测验 API ====================
 
 @app.get("/quiz", response_class=HTMLResponse)
-async def quiz_page(request: Request):
+def quiz_page(request: Request):
     return templates.TemplateResponse(request, "quiz.html")
 
 
 @app.get("/review", response_class=HTMLResponse)
-async def review_page(request: Request):
+def review_page(request: Request):
     return templates.TemplateResponse(request, "review.html")
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard_page(request: Request):
+def dashboard_page(request: Request):
     return templates.TemplateResponse(request, "dashboard.html")
 
 
 @app.get("/trial", response_class=HTMLResponse)
-async def trial_page(request: Request):
+def trial_page(request: Request):
     return templates.TemplateResponse(request, "trial.html")
 
 
 @app.get("/api/quiz/questions")
-async def get_quiz_questions(
+def get_quiz_questions(
     layer: Optional[str] = None,
     difficulty: Optional[str] = None,
     chapter: Optional[str] = None,
@@ -706,7 +707,7 @@ async def get_quiz_questions(
 
 
 @app.get("/api/quiz/chapters")
-async def get_chapter_structure():
+def get_chapter_structure():
     global quiz_service
     if not quiz_service:
         if langgraph_engine:
@@ -721,7 +722,7 @@ async def get_chapter_structure():
 
 
 @app.post("/api/quiz/answer")
-async def submit_quiz_answer(req: QuizAnswerRequest):
+def submit_quiz_answer(req: QuizAnswerRequest):
     global quiz_service
     if not quiz_service:
         if langgraph_engine:
@@ -762,7 +763,7 @@ async def submit_quiz_answer(req: QuizAnswerRequest):
 
 
 @app.get("/api/quiz/stats")
-async def get_quiz_stats():
+def get_quiz_stats():
     global quiz_service
     if not quiz_service:
         if langgraph_engine:
@@ -777,7 +778,7 @@ async def get_quiz_stats():
 
 
 @app.post("/api/quiz/questions")
-async def create_quiz_question(req: MCQuestionCreate):
+def create_quiz_question(req: MCQuestionCreate):
     global quiz_service
     if not quiz_service:
         if langgraph_engine:
@@ -793,7 +794,7 @@ async def create_quiz_question(req: MCQuestionCreate):
 
 
 @app.post("/api/quiz/generate")
-async def generate_quiz_questions(req: QuizGenerateRequest):
+def generate_quiz_questions(req: QuizGenerateRequest):
     global question_generator
     if not question_generator:
         if langgraph_engine:
@@ -801,9 +802,7 @@ async def generate_quiz_questions(req: QuizGenerateRequest):
         if not question_generator:
             raise HTTPException(status_code=503, detail="习题生成服务未初始化")
     try:
-        # LLM 生成耗时 5-20s，放线程池避免阻塞事件循环
-        result = await asyncio.to_thread(
-            question_generator.generate,
+        result = question_generator.generate(
             layer=req.layer,
             chapter=req.chapter,
             difficulty=req.difficulty,
@@ -822,7 +821,7 @@ async def generate_quiz_questions(req: QuizGenerateRequest):
 # ==================== 考试试卷 API ====================
 
 @app.get("/api/exam/papers")
-async def get_exam_papers():
+def get_exam_papers():
     global exam_service
     if not exam_service:
         if langgraph_engine:
@@ -837,7 +836,7 @@ async def get_exam_papers():
 
 
 @app.get("/api/exam/papers/{paper_id}")
-async def get_exam_paper(paper_id: str):
+def get_exam_paper(paper_id: str):
     global exam_service
     if not exam_service:
         if langgraph_engine:
@@ -857,7 +856,7 @@ async def get_exam_paper(paper_id: str):
 
 
 @app.post("/api/exam/papers/import")
-async def import_exam_paper(request: Request):
+def import_exam_paper(data: Dict):
     global exam_service
     if not exam_service:
         if langgraph_engine:
@@ -865,7 +864,6 @@ async def import_exam_paper(request: Request):
         if not exam_service:
             raise HTTPException(status_code=503, detail="Exam 服务未初始化")
     try:
-        data = await request.json()
         paper_id = exam_service.create_exam_paper(data)
         return {"success": True, "paper_id": paper_id}
     except Exception as e:
@@ -874,7 +872,7 @@ async def import_exam_paper(request: Request):
 
 
 @app.post("/api/exam/submit")
-async def submit_exam(req: ExamSubmitRequest):
+def submit_exam(req: ExamSubmitRequest):
     global exam_service
     if not exam_service:
         if langgraph_engine:
@@ -908,7 +906,7 @@ async def submit_exam(req: ExamSubmitRequest):
 
 
 @app.get("/api/exam/analysis/{session_id}")
-async def get_exam_analysis(session_id: str):
+def get_exam_analysis(session_id: str):
     global exam_service
     if not exam_service:
         if langgraph_engine:
@@ -924,7 +922,7 @@ async def get_exam_analysis(session_id: str):
 
 
 @app.get("/api/exam/recommendations/{session_id}")
-async def get_exam_recommendations(session_id: str, limit: int = 20):
+def get_exam_recommendations(session_id: str, limit: int = 20):
     global exam_service
     if not exam_service:
         if langgraph_engine:
@@ -939,7 +937,7 @@ async def get_exam_recommendations(session_id: str, limit: int = 20):
 
 
 @app.get("/api/exam/history/{session_id}")
-async def get_exam_history(session_id: str):
+def get_exam_history(session_id: str):
     global exam_service
     if not exam_service:
         if langgraph_engine:
@@ -954,7 +952,7 @@ async def get_exam_history(session_id: str):
 
 
 @app.get("/api/exam/result/{result_id}")
-async def get_exam_result(result_id: int):
+def get_exam_result(result_id: int):
     global exam_service
     if not exam_service:
         if langgraph_engine:
@@ -976,7 +974,7 @@ async def get_exam_result(result_id: int):
 # ==================== 复习调度 API ====================
 
 @app.get("/api/review/state/{session_id}")
-async def get_review_state(session_id: str):
+def get_review_state(session_id: str):
     if not mastery_service or not mastery_service.available:
         raise HTTPException(status_code=503, detail="复习调度器未初始化")
     try:
@@ -987,7 +985,7 @@ async def get_review_state(session_id: str):
 
 
 @app.get("/api/review/due/{session_id}")
-async def get_due_reviews(session_id: str, lookahead: float = 48, limit: int = 50):
+def get_due_reviews(session_id: str, lookahead: float = 48, limit: int = 50):
     if not mastery_service or not mastery_service.available:
         raise HTTPException(status_code=503, detail="复习调度器未初始化")
     try:
@@ -998,7 +996,7 @@ async def get_due_reviews(session_id: str, lookahead: float = 48, limit: int = 5
 
 
 @app.post("/api/review/record")
-async def record_review(req: ReviewRecordRequest):
+def record_review(req: ReviewRecordRequest):
     if not mastery_service or not mastery_service.available:
         raise HTTPException(status_code=503, detail="复习调度器未初始化")
     try:
@@ -1012,7 +1010,7 @@ async def record_review(req: ReviewRecordRequest):
 
 
 @app.get("/api/review/stats/{session_id}")
-async def get_review_stats(session_id: str):
+def get_review_stats(session_id: str):
     if not mastery_service or not mastery_service.available:
         raise HTTPException(status_code=503, detail="复习调度器未初始化")
     try:
@@ -1025,7 +1023,7 @@ async def get_review_stats(session_id: str):
 # ==================== 答案满意度反馈 API ====================
 
 @app.post("/api/feedback")
-async def submit_feedback(req: FeedbackRequest):
+def submit_feedback(req: FeedbackRequest):
     if not mastery_service or not mastery_service.available:
         raise HTTPException(status_code=503, detail="反馈服务未初始化")
     try:
@@ -1039,7 +1037,7 @@ async def submit_feedback(req: FeedbackRequest):
 
 
 @app.get("/api/feedback/stats")
-async def get_feedback_stats(session_id: Optional[str] = None):
+def get_feedback_stats(session_id: Optional[str] = None):
     if not mastery_service or not mastery_service.available:
         raise HTTPException(status_code=503, detail="反馈服务未初始化")
     try:
@@ -1052,7 +1050,7 @@ async def get_feedback_stats(session_id: Optional[str] = None):
 # ==================== 学习仪表盘 API ====================
 
 @app.get("/api/dashboard/overview/{session_id}")
-async def get_dashboard_overview(session_id: str):
+def get_dashboard_overview(session_id: str):
     global dashboard_service
     if not dashboard_service:
         init_dashboard_service()
@@ -1066,7 +1064,7 @@ async def get_dashboard_overview(session_id: str):
 
 
 @app.post("/api/dashboard/report/{session_id}")
-async def generate_dashboard_report(session_id: str):
+def generate_dashboard_report(session_id: str):
     global dashboard_service
     if not dashboard_service:
         init_dashboard_service()
@@ -1098,32 +1096,32 @@ class WrongEntry(BaseModel):
 
 
 @app.get("/api/quiz/done")
-async def api_get_done_ids():
+def api_get_done_ids():
     return {"ids": quiz_storage.get_done_ids()}
 
 
 @app.post("/api/quiz/done/{question_id}")
-async def api_mark_done(question_id: str):
+def api_mark_done(question_id: str):
     return {"ids": quiz_storage.mark_done(question_id)}
 
 
 @app.get("/api/quiz/wrong")
-async def api_get_wrong_list():
+def api_get_wrong_list():
     return {"list": quiz_storage.get_wrong_list()}
 
 
 @app.post("/api/quiz/wrong")
-async def api_add_wrong(entry: WrongEntry):
+def api_add_wrong(entry: WrongEntry):
     return {"list": quiz_storage.add_wrong(entry.model_dump())}
 
 
 @app.delete("/api/quiz/wrong/{question_id}")
-async def api_remove_wrong(question_id: str):
+def api_remove_wrong(question_id: str):
     return {"list": quiz_storage.remove_wrong(question_id)}
 
 
 @app.delete("/api/quiz/wrong")
-async def api_clear_wrong():
+def api_clear_wrong():
     quiz_storage.clear_wrong()
     return {"success": True}
 
@@ -1141,7 +1139,7 @@ def _ensure_trial_service():
 
 
 @app.post("/api/trial/create")
-async def create_trial(req: TrialCreateRequest):
+def create_trial(req: TrialCreateRequest):
     try:
         service = _ensure_trial_service()
         return service.create_trial(req.name, per_layer=req.per_layer, seed=req.seed)
@@ -1155,7 +1153,7 @@ async def create_trial(req: TrialCreateRequest):
 
 
 @app.get("/api/trial/list")
-async def list_trials():
+def list_trials():
     try:
         return {"trials": _ensure_trial_service().list_trials()}
     except HTTPException:
@@ -1166,7 +1164,7 @@ async def list_trials():
 
 
 @app.post("/api/trial/{trial_id}/participants")
-async def add_trial_participant(trial_id: str, req: TrialParticipantRequest):
+def add_trial_participant(trial_id: str, req: TrialParticipantRequest):
     try:
         participant = _ensure_trial_service().add_participant(trial_id, req.code)
         return participant
@@ -1180,7 +1178,7 @@ async def add_trial_participant(trial_id: str, req: TrialParticipantRequest):
 
 
 @app.get("/api/trial/{trial_id}/participants")
-async def list_trial_participants(trial_id: str):
+def list_trial_participants(trial_id: str):
     try:
         return {"participants": _ensure_trial_service().list_participants(trial_id)}
     except HTTPException:
@@ -1193,7 +1191,7 @@ async def list_trial_participants(trial_id: str):
 
 
 @app.post("/api/trial/join")
-async def join_trial(req: TrialJoinRequest):
+def join_trial(req: TrialJoinRequest):
     try:
         return _ensure_trial_service().join(req.code, req.session_id)
     except HTTPException:
@@ -1206,7 +1204,7 @@ async def join_trial(req: TrialJoinRequest):
 
 
 @app.post("/api/trial/test/start")
-async def start_trial_test(req: TrialTestStartRequest):
+def start_trial_test(req: TrialTestStartRequest):
     try:
         return _ensure_trial_service().start_test(req.code, req.phase)
     except HTTPException:
@@ -1219,7 +1217,7 @@ async def start_trial_test(req: TrialTestStartRequest):
 
 
 @app.post("/api/trial/test/submit")
-async def submit_trial_test(req: TrialTestSubmitRequest):
+def submit_trial_test(req: TrialTestSubmitRequest):
     try:
         return _ensure_trial_service().submit_test(req.test_id, req.answers)
     except HTTPException:
@@ -1232,7 +1230,7 @@ async def submit_trial_test(req: TrialTestSubmitRequest):
 
 
 @app.get("/api/trial/{trial_id}/analysis")
-async def get_trial_analysis(trial_id: str):
+def get_trial_analysis(trial_id: str):
     try:
         return _ensure_trial_service().get_analysis(trial_id)
     except HTTPException:
@@ -1245,7 +1243,7 @@ async def get_trial_analysis(trial_id: str):
 
 
 @app.post("/api/trial/{trial_id}/report")
-async def generate_trial_report(trial_id: str):
+def generate_trial_report(trial_id: str):
     try:
         report = _ensure_trial_service().generate_report(trial_id)
         if report is None:
