@@ -67,17 +67,17 @@ def client(mock_engine):
 
     # 保存原始值
     orig = {
-        "engine": web_mod.langgraph_engine,
-        "image": web_mod.image_generator,
-        "entity_service": web_mod.entity_service,
-        "mastery_service": web_mod.mastery_service,
+        "engine": web_mod.deps.langgraph_engine,
+        "image": web_mod.deps.image_generator,
+        "entity_service": web_mod.deps.entity_service,
+        "mastery_service": web_mod.deps.mastery_service,
     }
 
     # 注入 mock engine 和 service
-    web_mod.langgraph_engine = mock_engine
-    web_mod.image_generator = None
-    web_mod.entity_service = EntityService(mock_engine.driver)
-    web_mod.mastery_service = MasteryService(None)
+    web_mod.deps.langgraph_engine = mock_engine
+    web_mod.deps.image_generator = None
+    web_mod.deps.entity_service = EntityService(mock_engine.driver)
+    web_mod.deps.mastery_service = MasteryService(None)
 
     with patch("web.middleware.get_settings") as mock_mw:
         mock_mw.return_value = MagicMock(api_key="")
@@ -86,10 +86,10 @@ def client(mock_engine):
         yield c
 
     # 恢复
-    web_mod.langgraph_engine = orig["engine"]
-    web_mod.image_generator = orig["image"]
-    web_mod.entity_service = orig["entity_service"]
-    web_mod.mastery_service = orig["mastery_service"]
+    web_mod.deps.langgraph_engine = orig["engine"]
+    web_mod.deps.image_generator = orig["image"]
+    web_mod.deps.entity_service = orig["entity_service"]
+    web_mod.deps.mastery_service = orig["mastery_service"]
 
 
 @pytest.fixture(autouse=True)
@@ -111,19 +111,19 @@ def client_with_tracker(mock_engine, tmp_path):
 
     tracker = MasteryTracker(db_path=str(tmp_path / "mastery.db"))
     orig = {
-        "engine": web_mod.langgraph_engine,
-        "mastery_service": web_mod.mastery_service,
+        "engine": web_mod.deps.langgraph_engine,
+        "mastery_service": web_mod.deps.mastery_service,
     }
-    web_mod.langgraph_engine = mock_engine
-    web_mod.mastery_service = MasteryService(tracker)
+    web_mod.deps.langgraph_engine = mock_engine
+    web_mod.deps.mastery_service = MasteryService(tracker)
 
     with patch("web.middleware.get_settings") as mock_mw:
         mock_mw.return_value = MagicMock(api_key="")
         c = TestClient(web_mod.app)
         yield c
 
-    web_mod.langgraph_engine = orig["engine"]
-    web_mod.mastery_service = orig["mastery_service"]
+    web_mod.deps.langgraph_engine = orig["engine"]
+    web_mod.deps.mastery_service = orig["mastery_service"]
     tracker.close()
 
 
@@ -149,22 +149,22 @@ def client_with_quiz(mock_engine):
     }
 
     orig = {
-        "engine": web_mod.langgraph_engine,
-        "quiz_service": web_mod.quiz_service,
-        "question_generator": web_mod.question_generator,
+        "engine": web_mod.deps.langgraph_engine,
+        "quiz_service": web_mod.deps.quiz_service,
+        "question_generator": web_mod.deps.question_generator,
     }
-    web_mod.langgraph_engine = mock_engine
-    web_mod.quiz_service = mock_quiz
-    web_mod.question_generator = mock_gen
+    web_mod.deps.langgraph_engine = mock_engine
+    web_mod.deps.quiz_service = mock_quiz
+    web_mod.deps.question_generator = mock_gen
 
     with patch("web.middleware.get_settings") as mock_mw:
         mock_mw.return_value = MagicMock(api_key="")
         c = TestClient(web_mod.app)
         yield c, mock_quiz, mock_gen
 
-    web_mod.langgraph_engine = orig["engine"]
-    web_mod.quiz_service = orig["quiz_service"]
-    web_mod.question_generator = orig["question_generator"]
+    web_mod.deps.langgraph_engine = orig["engine"]
+    web_mod.deps.quiz_service = orig["quiz_service"]
+    web_mod.deps.question_generator = orig["question_generator"]
 
 
 # ---------- Health ----------
@@ -388,13 +388,13 @@ class TestQuizGenerateEndpoint:
     def test_generate_returns_503_when_not_initialized(self, client, mock_engine):
         # 默认 client 注入 engine 但 question_generator 为 None，且 lazy-init 构造失败会置 None
         import web.graph_rag_web as web_mod
-        orig = web_mod.question_generator
-        web_mod.question_generator = None
+        orig = web_mod.deps.question_generator
+        web_mod.deps.question_generator = None
         try:
             resp = client.post("/api/quiz/generate", json={"count": 1})
             assert resp.status_code in (503, 500)
         finally:
-            web_mod.question_generator = orig
+            web_mod.deps.question_generator = orig
 
 
 class TestCreateQuestionSource:
@@ -486,19 +486,19 @@ def client_with_trial(mock_engine):
     mock_trial.generate_report.return_value = "# 用户试用评估报告\n正文"
 
     orig = {
-        "engine": web_mod.langgraph_engine,
-        "trial_service": web_mod.trial_service,
+        "engine": web_mod.deps.langgraph_engine,
+        "trial_service": web_mod.deps.trial_service,
     }
-    web_mod.langgraph_engine = mock_engine
-    web_mod.trial_service = mock_trial
+    web_mod.deps.langgraph_engine = mock_engine
+    web_mod.deps.trial_service = mock_trial
 
     with patch("web.middleware.get_settings") as mock_mw:
         mock_mw.return_value = MagicMock(api_key="")
         c = TestClient(web_mod.app)
         yield c, mock_trial
 
-    web_mod.langgraph_engine = orig["engine"]
-    web_mod.trial_service = orig["trial_service"]
+    web_mod.deps.langgraph_engine = orig["engine"]
+    web_mod.deps.trial_service = orig["trial_service"]
 
 
 class TestTrialEndpoints:
