@@ -380,8 +380,7 @@ class ExamService:
 
         # 排除已做题目
         try:
-            from src.services.quiz_storage import get_done_ids
-            done_ids = set(get_done_ids())
+            done_ids = set(self._tracker.get_quiz_done_ids(session_id)) if self._tracker else set()
         except Exception:
             done_ids = set()
 

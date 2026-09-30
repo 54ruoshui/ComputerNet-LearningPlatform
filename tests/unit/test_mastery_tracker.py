@@ -427,3 +427,92 @@ class TestTrialTables:
         assert behavior["total_entities"] == 2
         assert behavior["by_type"]["quiz_correct"]["count"] == 2
         assert behavior["by_type"]["quiz_wrong"]["count"] == 1
+
+
+class TestQuizStorage:
+    """quiz_done / quiz_wrong 表：按 session 隔离的已做/错题记录"""
+
+    ENTRY = {
+        "id": "mcq_001",
+        "text": "TCP 建立连接需要几次握手？",
+        "option_a": "2 次", "option_b": "3 次", "option_c": "4 次", "option_d": "5 次",
+        "correct_answer": "B", "explanation": "SYN / SYN+ACK / ACK",
+        "layer": "传输层", "difficulty": "basic", "selected": "A",
+        "time": "2026-09-30T10:00:00",
+    }
+
+    def test_done_mark_and_list(self, tracker):
+        assert tracker.get_quiz_done_ids(SID) == []
+        ids = tracker.mark_quiz_done(SID, "mcq_001")
+        assert ids == ["mcq_001"]
+        tracker.mark_quiz_done(SID, "mcq_002")
+        tracker.mark_quiz_done(SID, "mcq_001")  # 幂等
+        assert tracker.get_quiz_done_ids(SID) == ["mcq_001", "mcq_002"]
+
+    def test_done_isolated_by_session(self, tracker):
+        tracker.mark_quiz_done(SID, "mcq_001")
+        tracker.mark_quiz_done("other", "mcq_002")
+        assert tracker.get_quiz_done_ids(SID) == ["mcq_001"]
+        assert tracker.get_quiz_done_ids("other") == ["mcq_002"]
+
+    def test_wrong_upsert_newest_first_and_overwrite(self, tracker):
+        lst = tracker.upsert_quiz_wrong(SID, dict(self.ENTRY))
+        assert len(lst) == 1 and lst[0]["id"] == "mcq_001"
+        assert lst[0]["correct_answer"] == "B"
+        assert lst[0]["time"] == self.ENTRY["time"]
+
+        # 新错题插到队首
+        entry2 = dict(self.ENTRY, id="mcq_002", text="UDP 首部固定长度？")
+        lst = tracker.upsert_quiz_wrong(SID, entry2)
+        assert [w["id"] for w in lst] == ["mcq_002", "mcq_001"]
+
+        # 同 id 覆盖：内容更新、条数不变
+        entry1b = dict(self.ENTRY, selected="C")
+        lst = tracker.upsert_quiz_wrong(SID, entry1b)
+        assert len(lst) == 2
+        wrong = next(w for w in lst if w["id"] == "mcq_001")
+        assert wrong["selected"] == "C"
+
+    def test_wrong_remove_and_clear(self, tracker):
+        tracker.upsert_quiz_wrong(SID, dict(self.ENTRY))
+        tracker.upsert_quiz_wrong(SID, dict(self.ENTRY, id="mcq_002"))
+
+        lst = tracker.remove_quiz_wrong(SID, "mcq_001")
+        assert [w["id"] for w in lst] == ["mcq_002"]
+
+        # 隔离：清空不影响其他会话
+        tracker.upsert_quiz_wrong("other", dict(self.ENTRY, id="mcq_003"))
+        tracker.clear_quiz_wrong(SID)
+        assert tracker.get_quiz_wrong_list(SID) == []
+        assert [w["id"] for w in tracker.get_quiz_wrong_list("other")] == ["mcq_003"]
+
+    def test_migrate_legacy_json_idempotent(self, tracker, tmp_path):
+        import json as _json
+
+        quiz_dir = tmp_path / "quiz"
+        quiz_dir.mkdir()
+        (quiz_dir / "done_ids.json").write_text(
+            _json.dumps(["mcq_a", "mcq_b"]), encoding="utf-8"
+        )
+        (quiz_dir / "wrong_answers.json").write_text(
+            _json.dumps([self.ENTRY]), encoding="utf-8"
+        )
+
+        tracker.migrate_legacy_quiz_json(str(quiz_dir))
+
+        assert tracker.get_quiz_done_ids("default") == ["mcq_a", "mcq_b"]
+        wrong = tracker.get_quiz_wrong_list("default")
+        assert len(wrong) == 1 and wrong[0]["id"] == "mcq_001"
+        assert wrong[0]["explanation"] == self.ENTRY["explanation"]
+        # 源文件改名，二次执行不重复迁移
+        assert (quiz_dir / "done_ids.json.migrated").exists()
+        assert (quiz_dir / "wrong_answers.json.migrated").exists()
+        tracker.migrate_legacy_quiz_json(str(quiz_dir))
+        assert tracker.get_quiz_done_ids("default") == ["mcq_a", "mcq_b"]
+        assert len(tracker.get_quiz_wrong_list("default")) == 1
+
+    def test_migrate_legacy_json_missing_files_ok(self, tracker, tmp_path):
+        empty = tmp_path / "empty"
+        empty.mkdir()
+        tracker.migrate_legacy_quiz_json(str(empty))  # 不应抛错
+        assert tracker.get_quiz_done_ids("default") == []

@@ -117,3 +117,4 @@ class WrongEntry(BaseModel):
     difficulty: str
     selected: str
     time: Optional[str] = None
+    session_id: Optional[str] = None

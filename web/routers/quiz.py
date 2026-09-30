@@ -6,7 +6,6 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.exceptions import GraphRAGError
-from src.services import quiz_storage
 from web import deps
 from web.deps import get_question_generator, get_quiz_service
 from web.schemas import (
@@ -120,34 +119,49 @@ def generate_quiz_questions(req: QuizGenerateRequest, generator=Depends(get_ques
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ==================== 错题集 & 已做题目 本地存储 ====================
+# ==================== 错题集 & 已做题目（按 session 隔离，存 SQLite） ====================
+
+def _require_quiz_storage(detail: str = "存储服务未初始化"):
+    service = deps.mastery_service
+    if not service or not service.available:
+        raise HTTPException(status_code=503, detail=detail)
+    return service
+
 
 @router.get("/done")
-def api_get_done_ids():
-    return {"ids": quiz_storage.get_done_ids()}
+def api_get_done_ids(session_id: str = "default"):
+    service = _require_quiz_storage()
+    return {"ids": service.get_quiz_done_ids(session_id)}
 
 
 @router.post("/done/{question_id}")
-def api_mark_done(question_id: str):
-    return {"ids": quiz_storage.mark_done(question_id)}
+def api_mark_done(question_id: str, session_id: str = "default"):
+    service = _require_quiz_storage()
+    return {"ids": service.mark_quiz_done(session_id, question_id)}
 
 
 @router.get("/wrong")
-def api_get_wrong_list():
-    return {"list": quiz_storage.get_wrong_list()}
+def api_get_wrong_list(session_id: str = "default"):
+    service = _require_quiz_storage()
+    return {"list": service.get_quiz_wrong_list(session_id)}
 
 
 @router.post("/wrong")
 def api_add_wrong(entry: WrongEntry):
-    return {"list": quiz_storage.add_wrong(entry.model_dump())}
+    service = _require_quiz_storage()
+    sid = entry.session_id or "default"
+    payload = entry.model_dump(exclude={"session_id"})
+    return {"list": service.upsert_quiz_wrong(sid, payload)}
 
 
 @router.delete("/wrong/{question_id}")
-def api_remove_wrong(question_id: str):
-    return {"list": quiz_storage.remove_wrong(question_id)}
+def api_remove_wrong(question_id: str, session_id: str = "default"):
+    service = _require_quiz_storage()
+    return {"list": service.remove_quiz_wrong(session_id, question_id)}
 
 
 @router.delete("/wrong")
-def api_clear_wrong():
-    quiz_storage.clear_wrong()
+def api_clear_wrong(session_id: str = "default"):
+    service = _require_quiz_storage()
+    service.clear_quiz_wrong(session_id)
     return {"success": True}

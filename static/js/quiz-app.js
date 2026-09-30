@@ -46,25 +46,34 @@
         return res.json();
     }
 
+    // 已做/错题按 session 隔离，与答题判定共用 localStorage 的会话 ID
+    function quizSessionId() {
+        return localStorage.getItem("graphrag_session_id") || "default";
+    }
+
+    function quizSessionQuery() {
+        return "session_id=" + encodeURIComponent(quizSessionId());
+    }
+
     // ==================== Done IDs ====================
 
     async function getDoneIds() {
         if (_doneCache !== null) return _doneCache;
-        try { const data = await apiGet("/api/quiz/done"); _doneCache = data.ids || []; }
+        try { const data = await apiGet("/api/quiz/done?" + quizSessionQuery()); _doneCache = data.ids || []; }
         catch { _doneCache = []; }
         return _doneCache;
     }
 
     async function markDone(id) {
         _doneCache = null;
-        return apiPost("/api/quiz/done/" + encodeURIComponent(id));
+        return apiPost("/api/quiz/done/" + encodeURIComponent(id) + "?" + quizSessionQuery());
     }
 
     // ==================== Wrong List ====================
 
     async function getWrongList() {
         if (_wrongCache !== null) return _wrongCache;
-        try { const data = await apiGet("/api/quiz/wrong"); _wrongCache = data.list || []; }
+        try { const data = await apiGet("/api/quiz/wrong?" + quizSessionQuery()); _wrongCache = data.list || []; }
         catch { _wrongCache = []; }
         return _wrongCache;
     }
@@ -78,13 +87,14 @@
             correct_answer: result.correct_answer,
             explanation: result.explanation,
             layer: q.layer, difficulty: q.difficulty,
-            selected: selected, time: new Date().toISOString()
+            selected: selected, time: new Date().toISOString(),
+            session_id: quizSessionId()
         });
     }
 
     async function removeWrong(id) {
         _wrongCache = null;
-        return apiDelete("/api/quiz/wrong/" + encodeURIComponent(id));
+        return apiDelete("/api/quiz/wrong/" + encodeURIComponent(id) + "?" + quizSessionQuery());
     }
 
     // ==================== 侧边栏折叠（桌面端） ====================
@@ -471,7 +481,7 @@
     window.clearWrongList = async function () {
         if (!confirm("确定要清空错题集吗？")) return;
         _wrongCache = null;
-        await apiDelete("/api/quiz/wrong");
+        await apiDelete("/api/quiz/wrong?" + quizSessionQuery());
         await renderWrongList();
         await updateStatsSummary();
         showToast("错题集已清空", "success");

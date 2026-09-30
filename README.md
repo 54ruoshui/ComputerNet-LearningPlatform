@@ -180,10 +180,13 @@ aigc/
 │       ├── graph_stats_service.py      # 图谱统计
 │       ├── graph_visualization_service.py  # D3.js 图谱数据
 │       ├── quiz_service.py     # 选择题 CRUD + 答题校验
-│       ├── quiz_storage.py     # 本地错题/历史存储
 │       └── mastery_service.py  # 掌握度上下文注入
 ├── web/                        # Web 层
-│   ├── graph_rag_web.py        # FastAPI 应用 + 全部端点
+│   ├── graph_rag_web.py        # FastAPI 应用装配 + lifespan
+│   ├── deps.py               # 服务实例 + 依赖注入（懒初始化）
+│   ├── schemas.py            # Pydantic 请求模型
+│   ├── middleware.py / rate_limiter.py
+│   └── routers/              # 按模块拆分的 API 路由
 │   ├── middleware.py           # API Key 认证
 │   └── rate_limiter.py         # IP 滑动窗口速率限制
 ├── templates/

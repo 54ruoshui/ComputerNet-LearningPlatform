@@ -109,3 +109,23 @@ class MasteryService:
         if not self._tracker:
             return {"total": 0, "positive": 0, "negative": 0, "satisfaction_rate": 0.0, "by_day": []}
         return self._tracker.get_feedback_stats(session_id)
+
+    # ==================== 刷题已做/错题记录 ====================
+
+    def get_quiz_done_ids(self, session_id: str) -> List[str]:
+        return self._tracker.get_quiz_done_ids(session_id)
+
+    def mark_quiz_done(self, session_id: str, question_id: str) -> List[str]:
+        return self._tracker.mark_quiz_done(session_id, question_id)
+
+    def get_quiz_wrong_list(self, session_id: str) -> List[dict]:
+        return self._tracker.get_quiz_wrong_list(session_id)
+
+    def upsert_quiz_wrong(self, session_id: str, entry: dict) -> List[dict]:
+        return self._tracker.upsert_quiz_wrong(session_id, entry)
+
+    def remove_quiz_wrong(self, session_id: str, question_id: str) -> List[dict]:
+        return self._tracker.remove_quiz_wrong(session_id, question_id)
+
+    def clear_quiz_wrong(self, session_id: str) -> None:
+        self._tracker.clear_quiz_wrong(session_id)

@@ -85,6 +85,7 @@ class MasteryTracker:
             self._init_exam_tables()
             self._init_feedback_table()
             self._init_trial_tables()
+            self._init_quiz_tables()
 
     def _init_exam_tables(self):
         # NOTE: called from _init_tables() which already holds self._lock
@@ -204,6 +205,37 @@ class MasteryTracker:
         self.conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_trial_tests_trial
             ON trial_tests(trial_id)
+        """)
+        self.conn.commit()
+
+    def _init_quiz_tables(self):
+        # NOTE: called from _init_tables() which already holds self._lock
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS quiz_done (
+                session_id  TEXT NOT NULL,
+                question_id TEXT NOT NULL,
+                done_at     TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (session_id, question_id)
+            )
+        """)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS quiz_wrong (
+                session_id     TEXT NOT NULL,
+                question_id    TEXT NOT NULL,
+                text           TEXT NOT NULL DEFAULT '',
+                option_a       TEXT NOT NULL DEFAULT '',
+                option_b       TEXT NOT NULL DEFAULT '',
+                option_c       TEXT NOT NULL DEFAULT '',
+                option_d       TEXT NOT NULL DEFAULT '',
+                correct_answer TEXT NOT NULL DEFAULT '',
+                explanation    TEXT NOT NULL DEFAULT '',
+                layer          TEXT NOT NULL DEFAULT '',
+                difficulty     TEXT NOT NULL DEFAULT '',
+                selected       TEXT NOT NULL DEFAULT '',
+                wrong_time     TEXT,
+                created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (session_id, question_id)
+            )
         """)
         self.conn.commit()
 
@@ -1229,6 +1261,145 @@ class MasteryTracker:
             "total_events": total_events,
             "total_entities": distinct[0] if distinct else 0,
         }
+
+    # ==================== 刷题已做/错题记录（按 session 隔离） ====================
+
+    _WRONG_COLUMNS = (
+        "text", "option_a", "option_b", "option_c", "option_d",
+        "correct_answer", "explanation", "layer", "difficulty", "selected",
+    )
+
+    def get_quiz_done_ids(self, session_id: str) -> List[str]:
+        """该会话已做完的题目 ID 列表"""
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT question_id FROM quiz_done WHERE session_id = ? ORDER BY done_at",
+                (session_id,),
+            ).fetchall()
+        return [row[0] for row in rows]
+
+    def mark_quiz_done(self, session_id: str, question_id: str) -> List[str]:
+        """标记题目已做（幂等），返回该会话全量已做 ID 列表"""
+        with self._lock:
+            self.conn.execute(
+                """INSERT OR IGNORE INTO quiz_done (session_id, question_id)
+                   VALUES (?, ?)""",
+                (session_id, question_id),
+            )
+            self.conn.commit()
+            rows = self.conn.execute(
+                "SELECT question_id FROM quiz_done WHERE session_id = ? ORDER BY done_at",
+                (session_id,),
+            ).fetchall()
+        return [row[0] for row in rows]
+
+    def get_quiz_wrong_list(self, session_id: str) -> List[dict]:
+        """该会话的错题列表（最近添加的在前；覆盖更新保持原位，按 rowid 排序实现）"""
+        with self._lock:
+            rows = self.conn.execute(
+                f"""SELECT question_id, {', '.join(self._WRONG_COLUMNS)}, wrong_time
+                    FROM quiz_wrong WHERE session_id = ?
+                    ORDER BY rowid DESC""",
+                (session_id,),
+            ).fetchall()
+        return [
+            {
+                "id": row[0],
+                **{col: row[i + 1] for i, col in enumerate(self._WRONG_COLUMNS)},
+                "time": row[-1],
+            }
+            for row in rows
+        ]
+
+    def upsert_quiz_wrong(self, session_id: str, entry: dict) -> List[dict]:
+        """新增/覆盖一条错题（同 question_id 覆盖），返回该会话全量错题列表"""
+        cols = {c: str(entry.get(c, "") or "") for c in self._WRONG_COLUMNS}
+        with self._lock:
+            self.conn.execute(
+                f"""INSERT INTO quiz_wrong
+                       (session_id, question_id, {', '.join(self._WRONG_COLUMNS)}, wrong_time)
+                   VALUES (?, ?, {', '.join('?' for _ in self._WRONG_COLUMNS)}, ?)
+                   ON CONFLICT(session_id, question_id) DO UPDATE SET
+                       {', '.join(f'{c} = excluded.{c}' for c in self._WRONG_COLUMNS)},
+                       wrong_time = excluded.wrong_time""",
+                (
+                    session_id,
+                    str(entry.get("id", "")),
+                    *(cols[c] for c in self._WRONG_COLUMNS),
+                    entry.get("time"),
+                ),
+            )
+            self.conn.commit()
+        return self.get_quiz_wrong_list(session_id)
+
+    def remove_quiz_wrong(self, session_id: str, question_id: str) -> List[dict]:
+        """移除一条错题，返回剩余错题列表"""
+        with self._lock:
+            self.conn.execute(
+                "DELETE FROM quiz_wrong WHERE session_id = ? AND question_id = ?",
+                (session_id, question_id),
+            )
+            self.conn.commit()
+        return self.get_quiz_wrong_list(session_id)
+
+    def clear_quiz_wrong(self, session_id: str) -> None:
+        """清空该会话的错题记录"""
+        with self._lock:
+            self.conn.execute(
+                "DELETE FROM quiz_wrong WHERE session_id = ?",
+                (session_id,),
+            )
+            self.conn.commit()
+
+    def migrate_legacy_quiz_json(self, base_dir: str, default_session: str = "default") -> None:
+        """把 quiz_storage 时代的全局 JSON 记录一次性迁入 default 会话
+
+        迁移成功后源文件改名 *.migrated 保证幂等；文件不存在则跳过。
+        """
+        import os
+
+        done_file = os.path.join(base_dir, "done_ids.json")
+        wrong_file = os.path.join(base_dir, "wrong_answers.json")
+
+        if os.path.exists(done_file):
+            try:
+                with open(done_file, encoding="utf-8") as f:
+                    ids = json.load(f)
+                with self._lock:
+                    for qid in ids:
+                        self.conn.execute(
+                            "INSERT OR IGNORE INTO quiz_done (session_id, question_id) VALUES (?, ?)",
+                            (default_session, str(qid)),
+                        )
+                    self.conn.commit()
+                os.rename(done_file, done_file + ".migrated")
+                logger.info("旧 done_ids.json 已迁入 SQLite", count=len(ids))
+            except Exception as e:
+                logger.warning("done_ids.json 迁移失败", error=str(e))
+
+        if os.path.exists(wrong_file):
+            try:
+                with open(wrong_file, encoding="utf-8") as f:
+                    entries = json.load(f)
+                with self._lock:
+                    for entry in entries:
+                        cols = {c: str(entry.get(c, "") or "") for c in self._WRONG_COLUMNS}
+                        self.conn.execute(
+                            f"""INSERT OR IGNORE INTO quiz_wrong
+                                   (session_id, question_id, {', '.join(self._WRONG_COLUMNS)}, wrong_time)
+                               VALUES (?, ?, {', '.join('?' for _ in self._WRONG_COLUMNS)}, ?)""",
+                            (
+                                default_session,
+                                str(entry.get("id", "")),
+                                *(cols[c] for c in self._WRONG_COLUMNS),
+                                entry.get("time"),
+                            ),
+                        )
+                    self.conn.commit()
+                os.rename(wrong_file, wrong_file + ".migrated")
+                logger.info("旧 wrong_answers.json 已迁入 SQLite", count=len(entries))
+            except Exception as e:
+                logger.warning("wrong_answers.json 迁移失败", error=str(e))
 
     def close(self):
         if self.conn:

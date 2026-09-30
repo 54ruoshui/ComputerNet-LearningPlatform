@@ -593,3 +593,87 @@ class TestTrialEndpoints:
         mock_trial.generate_report.return_value = None
         resp = client.post("/api/trial/trial_abc12345/report")
         assert resp.status_code == 502
+
+
+# ---------- Quiz Done/Wrong（按 session 隔离的本地存储） ----------
+
+@pytest.fixture
+def client_with_quiz_storage(mock_engine, tmp_path):
+    """注入带真实 MasteryTracker 的 MasteryService，测 /api/quiz/done|wrong 端点"""
+    import web.graph_rag_web as web_mod
+    from src.mastery_tracker import MasteryTracker
+    from src.services.mastery_service import MasteryService
+
+    tracker = MasteryTracker(db_path=str(tmp_path / "mastery.db"))
+    orig = {
+        "engine": web_mod.deps.langgraph_engine,
+        "mastery_service": web_mod.deps.mastery_service,
+    }
+    web_mod.deps.langgraph_engine = mock_engine
+    web_mod.deps.mastery_service = MasteryService(tracker)
+
+    with patch("web.middleware.get_settings") as mock_mw:
+        mock_mw.return_value = MagicMock(api_key="")
+        c = TestClient(web_mod.app)
+        yield c
+
+    web_mod.deps.langgraph_engine = orig["engine"]
+    web_mod.deps.mastery_service = orig["mastery_service"]
+    tracker.close()
+
+
+class TestQuizDoneWrongEndpoints:
+
+    WRONG_BODY = {
+        "id": "mcq_001",
+        "text": "TCP 建立连接需要几次握手？",
+        "option_a": "2 次", "option_b": "3 次", "option_c": "4 次", "option_d": "5 次",
+        "correct_answer": "B", "explanation": "SYN / SYN+ACK / ACK",
+        "layer": "传输层", "difficulty": "basic", "selected": "A",
+        "time": "2026-09-30T10:00:00",
+    }
+
+    def test_done_mark_and_default_session(self, client_with_quiz_storage):
+        client = client_with_quiz_storage
+        assert client.get("/api/quiz/done").json()["ids"] == []
+        resp = client.post("/api/quiz/done/mcq_001")
+        assert resp.json()["ids"] == ["mcq_001"]
+        # 不带 session_id 的请求落到 default 会话
+        assert client.get("/api/quiz/done").json()["ids"] == ["mcq_001"]
+
+    def test_done_isolated_between_sessions(self, client_with_quiz_storage):
+        client = client_with_quiz_storage
+        client.post("/api/quiz/done/mcq_001?session_id=alice")
+        client.post("/api/quiz/done/mcq_002?session_id=bob")
+        assert client.get("/api/quiz/done?session_id=alice").json()["ids"] == ["mcq_001"]
+        assert client.get("/api/quiz/done?session_id=bob").json()["ids"] == ["mcq_002"]
+
+    def test_wrong_add_overwrite_remove_clear(self, client_with_quiz_storage):
+        client = client_with_quiz_storage
+        body = {**self.WRONG_BODY, "session_id": "alice"}
+        lst = client.post("/api/quiz/wrong", json=body).json()["list"]
+        assert [w["id"] for w in lst] == ["mcq_001"]
+
+        # 同 id 覆盖
+        body["selected"] = "C"
+        lst = client.post("/api/quiz/wrong", json=body).json()["list"]
+        assert len(lst) == 1 and lst[0]["selected"] == "C"
+
+        lst = client.delete("/api/quiz/wrong/mcq_001?session_id=alice").json()["list"]
+        assert lst == []
+
+        client.post("/api/quiz/wrong", json=body)
+        assert client.delete("/api/quiz/wrong?session_id=alice").json()["success"] is True
+        assert client.get("/api/quiz/wrong?session_id=alice").json()["list"] == []
+
+    def test_wrong_isolated_between_sessions(self, client_with_quiz_storage):
+        client = client_with_quiz_storage
+        client.post("/api/quiz/wrong", json={**self.WRONG_BODY, "session_id": "alice"})
+        assert client.get("/api/quiz/wrong?session_id=bob").json()["list"] == []
+
+    def test_storage_unavailable_503(self, client, mock_engine):
+        # client fixture 注入 MasteryService(None) → 不可用
+        resp = client.get("/api/quiz/done")
+        assert resp.status_code == 503
+        resp = client.post("/api/quiz/wrong", json=self.WRONG_BODY)
+        assert resp.status_code == 503

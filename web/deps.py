@@ -96,6 +96,11 @@ def init_mastery_tracker():
         db_path = os.path.join(project_root, "data", "memory", "mastery.db")
         tracker = MasteryTracker(db_path)
         mastery_service = MasteryService(tracker)
+        try:
+            # quiz_storage 时代的全局 JSON 一次性迁入 default 会话（幂等）
+            tracker.migrate_legacy_quiz_json(os.path.join(project_root, "data", "quiz"))
+        except Exception as e:
+            logger.warning("旧 quiz JSON 迁移失败", error=str(e))
         logger.info("掌握追踪器初始化完成")
         return tracker
     except Exception as e:
