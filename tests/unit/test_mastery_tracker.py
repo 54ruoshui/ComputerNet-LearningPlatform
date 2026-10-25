@@ -18,6 +18,14 @@ SID = "student-1"
 ENTITY = "TCP"
 
 
+class TestConnectionPragmas:
+    def test_wal_and_busy_timeout_enabled(self, tracker):
+        journal = tracker.conn.execute("PRAGMA journal_mode").fetchone()[0]
+        busy_timeout = tracker.conn.execute("PRAGMA busy_timeout").fetchone()[0]
+        assert journal == "wal"
+        assert busy_timeout == 30000
+
+
 def seed_review_state(tracker, entity=ENTITY, review_count=3, half_life=600.0,
                       ease_factor=2.5, last_review_at=None, next_review_at=None):
     """直接写入复习状态（绕过调度器，用于构造边界场景）"""

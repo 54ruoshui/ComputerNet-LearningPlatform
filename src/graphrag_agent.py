@@ -172,7 +172,10 @@ class GraphRAGAgent:
 
         # 会话记忆（sqlite 持久化 / memory 非持久化）
         if self.config.memory_backend == "sqlite":
-            self._db_conn = sqlite3.connect(self.config.sqlite_db_path, check_same_thread=False)
+            self._db_conn = sqlite3.connect(
+                self.config.sqlite_db_path, check_same_thread=False, timeout=30
+            )
+            self._db_conn.execute("PRAGMA busy_timeout=30000")
             self.checkpointer = SqliteSaver(self._db_conn)
             self.checkpointer.setup()
         else:
@@ -404,7 +407,7 @@ class GraphRAGAgent:
 
     async def _do_stream(self, question: str, messages: list, config: dict, meta: dict):
         import aiosqlite as _aiosqlite
-        _conn = _aiosqlite.connect(self.config.sqlite_db_path)
+        _conn = _aiosqlite.connect(self.config.sqlite_db_path, timeout=30)
         _checkpointer = AsyncSqliteSaver(_conn)
         await _checkpointer.setup()
         _agent = create_react_agent(
