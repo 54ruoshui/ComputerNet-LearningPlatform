@@ -1,8 +1,9 @@
 """前测-后测试用评估 API"""
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from web import deps
 from web.deps import get_trial_service, require_admin
 from web.schemas import (
     TrialCreateRequest,
@@ -69,9 +70,19 @@ def list_trial_participants(trial_id: str, _admin: None = Depends(require_admin)
 
 
 @router.post("/join")
-def join_trial(req: TrialJoinRequest, service=Depends(get_trial_service)):
+def join_trial(req: TrialJoinRequest, request: Request, service=Depends(get_trial_service)):
     try:
-        return service.join(req.code, req.session_id)
+        result = service.join(req.code, req.session_id)
+        # 参试码即会话凭证：把协商出的会话归属改绑到当前访客
+        # （换设备 join 时会话历史随人走；共用电脑换码则拿到新发会话）
+        tracker = deps._get_tracker()
+        visitor = request.scope.get("aigc_visitor") or request.cookies.get("aigc_visitor")
+        if tracker and visitor and result.get("session_id"):
+            try:
+                tracker.claim_session(result["session_id"], visitor)
+            except Exception as e:
+                logger.warning("会话归属改绑失败", error=str(e))
+        return result
     except HTTPException:
         raise
     except ValueError as e:

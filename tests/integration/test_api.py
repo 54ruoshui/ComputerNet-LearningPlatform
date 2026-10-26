@@ -128,6 +128,31 @@ def client_with_tracker(mock_engine, tmp_path):
 
 
 @pytest.fixture
+def client_with_sessions(mock_engine, tmp_path):
+    """真实 MasteryTracker + mock engine，测会话归属按访客 cookie 隔离"""
+    import web.graph_rag_web as web_mod
+    from src.mastery_tracker import MasteryTracker
+    from src.services.mastery_service import MasteryService
+
+    tracker = MasteryTracker(db_path=str(tmp_path / "mastery.db"))
+    orig = {
+        "engine": web_mod.deps.langgraph_engine,
+        "mastery_service": web_mod.deps.mastery_service,
+    }
+    web_mod.deps.langgraph_engine = mock_engine
+    web_mod.deps.mastery_service = MasteryService(tracker)
+
+    with patch("web.middleware.get_settings") as mock_mw:
+        mock_mw.return_value = MagicMock(api_key="")
+        c = TestClient(web_mod.app)
+        yield c, tracker
+
+    web_mod.deps.langgraph_engine = orig["engine"]
+    web_mod.deps.mastery_service = orig["mastery_service"]
+    tracker.close()
+
+
+@pytest.fixture
 def client_with_quiz(mock_engine):
     """注入 mock quiz_service 与 question_generator，测习题生成/入库端点"""
     import web.graph_rag_web as web_mod
@@ -243,6 +268,83 @@ class TestSessionEndpoints:
         mock_engine.delete_session.return_value = False
         resp = client.delete("/api/sessions/no-such-session")
         assert resp.status_code == 404
+
+
+# ---------- 会话归属（访客 cookie 隔离） ----------
+
+class TestSessionOwnership:
+
+    def test_new_session_binds_to_visitor(self, client_with_sessions):
+        client, tracker = client_with_sessions
+        resp = client.post("/api/sessions/new")
+        assert resp.status_code == 200
+        sid = resp.json()["session_id"]
+        assert tracker.get_session_owner(sid) == client.cookies.get("aigc_visitor")
+
+    def test_list_sessions_scoped_to_owner(self, client_with_sessions, mock_engine):
+        client, tracker = client_with_sessions
+        client.post("/api/sessions/new")  # new-session-id 绑定到当前访客
+        tracker.bind_session("stranger-session", "another-visitor")
+        mock_engine.list_sessions.return_value = ["new-session-id", "stranger-session"]
+
+        ids = [s["session_id"] for s in client.get("/api/sessions").json()["sessions"]]
+        assert "new-session-id" in ids
+        assert "stranger-session" not in ids
+
+    def test_own_session_history_and_delete(self, client_with_sessions, mock_engine):
+        client, tracker = client_with_sessions
+        client.post("/api/sessions/new")  # 绑定 new-session-id
+
+        assert client.get("/api/sessions/new-session-id/history").status_code == 200
+
+        mock_engine.delete_session.return_value = True
+        assert client.delete("/api/sessions/new-session-id").status_code == 200
+        assert tracker.get_session_owner("new-session-id") is None  # 删除后解绑
+
+    def test_foreign_session_history_delete_404(self, client_with_sessions):
+        client, tracker = client_with_sessions
+        tracker.bind_session("s-owned", "another-visitor")
+        assert client.get("/api/sessions/s-owned/history").status_code == 404
+        assert client.delete("/api/sessions/s-owned").status_code == 404
+
+    def test_unbound_session_history_delete_404(self, client_with_sessions):
+        # 未绑定会话（如他人私拼 ID）对当前访客不可见
+        client, _ = client_with_sessions
+        assert client.get("/api/sessions/never-bound/history").status_code == 404
+        assert client.delete("/api/sessions/never-bound").status_code == 404
+
+    def test_second_visitor_isolated(self, client_with_sessions, mock_engine):
+        client, tracker = client_with_sessions
+        client.post("/api/sessions/new")  # 访客 A 绑定 new-session-id
+
+        import web.graph_rag_web as web_mod
+        with patch("web.middleware.get_settings") as mock_mw:
+            mock_mw.return_value = MagicMock(api_key="")
+            other = TestClient(web_mod.app)  # 无 cookie 的全新 client = 访客 B
+
+        mock_engine.list_sessions.return_value = ["new-session-id"]
+        sessions = other.get("/api/sessions").json()["sessions"]
+        assert [s["session_id"] for s in sessions] == []
+        assert other.get("/api/sessions/new-session-id/history").status_code == 404
+
+    def test_query_foreign_session_404(self, client_with_sessions):
+        client, tracker = client_with_sessions
+        tracker.bind_session("s-x", "another-visitor")
+        resp = client.post("/api/query", json={"question": "q", "session_id": "s-x"})
+        assert resp.status_code == 404
+
+    def test_query_unbound_session_lazy_binds(self, client_with_sessions, mock_engine):
+        """存量会话首次查询时懒绑定到当前访客（治愈升级前的旧会话）"""
+        client, tracker = client_with_sessions
+        resp = client.post("/api/query", json={"question": "q", "session_id": "legacy-1"})
+        assert resp.status_code == 200
+        assert tracker.get_session_owner("legacy-1") == client.cookies.get("aigc_visitor")
+
+    def test_tracker_unavailable_fail_open(self, client, mock_engine):
+        """client fixture 的 MasteryService 无 tracker → 归属校验放行（降级一致）"""
+        assert client.get("/api/sessions/test-session-id/history").status_code == 200
+        resp = client.post("/api/query", json={"question": "q", "session_id": "any-session"})
+        assert resp.status_code == 200
 
 
 # ---------- Graph Stats ----------
@@ -502,6 +604,7 @@ def client_with_trial(mock_engine):
     ]
     mock_trial.join.return_value = {
         "participant": {"id": 1, "code": "P0001", "session_id": "sess-1"},
+        "session_id": "sess-1",
         "pre_done": True, "post_done": False,
     }
     mock_trial.start_test.return_value = {
@@ -589,6 +692,7 @@ class TestTrialEndpoints:
         resp = client.post("/api/trial/join", json={"code": "P0001", "session_id": "sess-1"})
         assert resp.status_code == 200
         assert resp.json()["pre_done"] is True
+        assert resp.json()["session_id"] == "sess-1"  # 服务端协商出的会话
         mock_trial.join.assert_called_once_with("P0001", "sess-1")
 
     def test_start_test_invalid_phase_422(self, client_with_trial):

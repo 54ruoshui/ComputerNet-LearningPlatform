@@ -87,6 +87,21 @@ class MasteryTracker:
             self._init_feedback_table()
             self._init_trial_tables()
             self._init_quiz_tables()
+            self._init_session_owners_table()
+
+    def _init_session_owners_table(self):
+        # NOTE: called from _init_tables() which already holds self._lock
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS session_owners (
+                session_id  TEXT PRIMARY KEY,
+                visitor_id  TEXT NOT NULL,
+                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_session_owners_visitor
+            ON session_owners(visitor_id)
+        """)
 
     def _init_exam_tables(self):
         # NOTE: called from _init_tables() which already holds self._lock
@@ -1401,6 +1416,59 @@ class MasteryTracker:
                 logger.info("旧 wrong_answers.json 已迁入 SQLite", count=len(entries))
             except Exception as e:
                 logger.warning("wrong_answers.json 迁移失败", error=str(e))
+
+    # ==================== 会话归属（无账号体系下的浏览器身份隔离） ====================
+
+    def bind_session(self, session_id: str, visitor_id: str):
+        """绑定会话归属；先绑先得（已绑定的会话不会被覆盖）"""
+        with self._lock:
+            self.conn.execute(
+                "INSERT OR IGNORE INTO session_owners (session_id, visitor_id) VALUES (?, ?)",
+                (session_id, visitor_id),
+            )
+            self.conn.commit()
+
+    def claim_session(self, session_id: str, visitor_id: str):
+        """强制改绑会话归属（参试码 join 后会话随人走）"""
+        with self._lock:
+            self.conn.execute(
+                """INSERT INTO session_owners (session_id, visitor_id) VALUES (?, ?)
+                   ON CONFLICT(session_id) DO UPDATE SET visitor_id = excluded.visitor_id""",
+                (session_id, visitor_id),
+            )
+            self.conn.commit()
+
+    def get_session_owner(self, session_id: str) -> Optional[str]:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT visitor_id FROM session_owners WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+        return row[0] if row else None
+
+    def list_sessions_for_visitor(self, visitor_id: str) -> list[str]:
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT session_id FROM session_owners WHERE visitor_id = ? ORDER BY created_at DESC",
+                (visitor_id,),
+            ).fetchall()
+        return [r[0] for r in rows]
+
+    def unbind_session(self, session_id: str):
+        with self._lock:
+            self.conn.execute("DELETE FROM session_owners WHERE session_id = ?", (session_id,))
+            self.conn.commit()
+
+    def get_participant_by_session(self, session_id: str) -> Optional[dict]:
+        """按已绑定的学习会话查被试（用于 join 时检测会话是否已被其他被试占用）"""
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT id, trial_id, code, session_id FROM trial_participants WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+        if not row:
+            return None
+        return {"id": row[0], "trial_id": row[1], "code": row[2], "session_id": row[3]}
 
     def close(self):
         if self.conn:

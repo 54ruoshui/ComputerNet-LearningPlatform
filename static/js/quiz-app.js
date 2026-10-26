@@ -64,6 +64,16 @@
         return localStorage.getItem("graphrag_session_id") || "default";
     }
 
+    // 无本地会话时向服务端申请一个；失败则保持 "default" 回落（离线韧性）
+    async function ensureSession() {
+        if (localStorage.getItem("graphrag_session_id")) return;
+        try {
+            const res = await fetch("/api/sessions/new", { method: "POST" });
+            const data = await res.json();
+            if (data.session_id) localStorage.setItem("graphrag_session_id", data.session_id);
+        } catch (e) { /* 静默 */ }
+    }
+
     function quizSessionQuery() {
         return "session_id=" + encodeURIComponent(quizSessionId());
     }
@@ -1221,6 +1231,8 @@
         $("quizSidebar").classList.remove("collapsed");
     }
 
-    loadChapterStructure();
-    updateStatsSummary();
+    ensureSession().then(() => {
+        loadChapterStructure();
+        updateStatsSummary();
+    });
 })();

@@ -185,6 +185,49 @@ class TestJoin:
         with pytest.raises(ValueError, match="无效"):
             service.join("PXXXX", "sess")
 
+    def test_join_default_session_gets_fresh(self, service):
+        """浏览器无会话（"default" 回落）时服务端另发新会话，杜绝共享 default 串台"""
+        complete_trial(service, service._tracker)
+        joined = service.join("P0000", "default")
+        sid = joined["session_id"]
+        assert sid and sid != "default"
+        assert joined["participant"]["session_id"] == sid
+
+        again = service.join("P0000", "default")  # 已绑定：返回原会话
+        assert again["session_id"] == sid
+
+    def test_join_foreign_session_gets_fresh(self, service):
+        """共用电脑：请求会话已被其他被试占用 → 服务端另发新会话"""
+        complete_trial(service, service._tracker)
+        service.join("P0000", "sess-A")
+        joined = service.join("P0001", "sess-A")
+        assert joined["session_id"] != "sess-A"
+        # 原被试绑定不受影响
+        assert service._tracker.get_participant_by_code("P0000")["session_id"] == "sess-A"
+
+    def test_join_rejoin_returns_bound_session(self, service):
+        """换设备回来：被试已绑定会话 → 忽略请求会话，返回原会话（历史延续）"""
+        complete_trial(service, service._tracker)
+        first = service.join("P0000", "sess-A")
+        second = service.join("P0000", "another-browser-session")
+        assert second["session_id"] == first["session_id"] == "sess-A"
+
+    def test_join_legacy_default_binding_renegotiated(self, service):
+        """旧版本可能把被试绑到共享 "default" 会话 → 视为未绑定重新协商"""
+        complete_trial(service, service._tracker)
+        tracker = service._tracker
+        pid = tracker.get_participant_by_code("P0000")["id"]
+        tracker.bind_participant_session(pid, "default")
+
+        joined = service.join("P0000", "sess-new")  # 请求会话可用 → 改绑它
+        assert joined["session_id"] == "sess-new"
+        assert tracker.get_participant_by_code("P0000")["session_id"] == "sess-new"
+
+        tracker.bind_participant_session(pid, "default")
+        joined = service.join("P0000", "default")  # 无可用会话 → 另发新会话
+        assert joined["session_id"] != "default"
+        assert tracker.get_participant_by_code("P0000")["session_id"] == joined["session_id"]
+
 
 class TestAnalysis:
     def test_aggregate_stats(self, service):

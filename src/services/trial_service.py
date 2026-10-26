@@ -107,15 +107,34 @@ class TrialService:
                 return code
 
     def join(self, code: str, session_id: str) -> dict:
-        """被试凭码加入，绑定学习会话；返回前后测完成状态"""
+        """被试凭码加入；协商学习会话归属后返回前后测完成状态。
+
+        - 请求会话为空/"default"，或已被其他被试占用（共用电脑）→ 服务端另发新会话
+        - 被试此前已绑定会话（换设备回来）→ 不改绑，返回原会话（历史延续）
+        - 响应顶层 session_id 为客户端应使用的会话
+        """
         participant = self._tracker.get_participant_by_code(code)
         if not participant:
             raise ValueError(f"被试码 {code} 无效")
-        if not participant["session_id"]:
-            self._tracker.bind_participant_session(participant["id"], session_id)
-            participant["session_id"] = session_id
+
+        effective = session_id
+        # 旧版本可能把被试绑到共享的 "default" 会话，视为未绑定重新协商
+        bound = participant["session_id"]
+        if bound and bound != "default":
+            effective = bound
+        else:
+            usable = bool(session_id) and session_id != "default"
+            if usable:
+                owner = self._tracker.get_participant_by_session(session_id)
+                if owner and owner["id"] != participant["id"]:
+                    usable = False
+            if not usable:
+                effective = str(uuid.uuid4())
+            self._tracker.bind_participant_session(participant["id"], effective)
+            participant["session_id"] = effective
+
         status = self._participant_status(participant)
-        return {"participant": participant, **status}
+        return {"participant": participant, "session_id": effective, **status}
 
     def _participant_status(self, participant: dict) -> dict:
         pre_done = post_done = False

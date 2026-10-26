@@ -866,16 +866,19 @@ async function loadSessionHistory() {
 }
 
 async function loadSessions() {
-    try {
-        var response = await fetch('/api/sessions');
-        var data = await response.json();
-        var sessions = data.sessions || [];
-        if (sessions.length > 0 && !currentSessionId) {
-            setCurrentSessionId(sessions[0].session_id);
-            updateSessionIndicator();
+    // 没有本地会话时新建一个；不再从服务端列表捡拾
+    // （共用电脑场景下捡拾会继承上一个人的会话）
+    if (!currentSessionId) {
+        try {
+            var response = await fetch('/api/sessions/new', { method: 'POST' });
+            var data = await response.json();
+            if (data.session_id) {
+                setCurrentSessionId(data.session_id);
+                updateSessionIndicator();
+            }
+        } catch (error) {
+            // silent：离线时保持 null，提问时会再次尝试
         }
-    } catch (error) {
-        // silent
     }
 }
 

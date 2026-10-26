@@ -2,7 +2,10 @@
 自定义中间件（纯 ASGI 实现，避免 BaseHTTPMiddleware 与 StaticFiles 的兼容性问题）。
 - APIKeyMiddleware: X-API-Key 认证
 - RequestIDMiddleware: 为每个请求注入 X-Request-ID
+- VisitorMiddleware: 为每个浏览器分配匿名访客 cookie（会话归属隔离的依据）
 """
+
+import uuid
 
 from starlette.responses import JSONResponse
 
@@ -76,3 +79,57 @@ class RequestIDMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_with_id)
+
+
+VISITOR_COOKIE = "aigc_visitor"
+VISITOR_COOKIE_MAX_AGE = 2592000  # 30 天
+
+
+class VisitorMiddleware:
+    """为每个浏览器分配稳定的匿名访客 ID（HttpOnly cookie）。
+
+    访客 ID 写入 scope["aigc_visitor"] 供路由读取，用于把会话归属到
+    具体浏览器（无账号体系下的轻量身份隔离）。首次访问时在响应上种 cookie。
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        visitor = self._parse_visitor_cookie(scope)
+        newly_issued = visitor is None
+        if newly_issued:
+            visitor = uuid.uuid4().hex
+        scope["aigc_visitor"] = visitor
+
+        if not newly_issued:
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_cookie(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                cookie = (
+                    f"{VISITOR_COOKIE}={visitor}; HttpOnly; SameSite=Lax; "
+                    f"Path=/; Max-Age={VISITOR_COOKIE_MAX_AGE}"
+                )
+                headers.append((b"set-cookie", cookie.encode()))
+                message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_with_cookie)
+
+    @staticmethod
+    def _parse_visitor_cookie(scope) -> str | None:
+        for key, value in scope.get("headers", []):
+            if key != b"cookie":
+                continue
+            for part in value.decode("latin-1").split(";"):
+                name, _, val = part.strip().partition("=")
+                if name == VISITOR_COOKIE and val:
+                    return val
+        return None

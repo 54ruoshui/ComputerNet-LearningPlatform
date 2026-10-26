@@ -368,6 +368,8 @@
         if (!code) { showToast("请输入参试码", "error"); return; }
         try {
             const data = await apiPost("/api/trial/join", { code: code, session_id: sessionId() });
+            // 服务端协商出的会话可能不同于本地（共用电脑换码/换设备找回），以服务端为准
+            if (data.session_id) localStorage.setItem("graphrag_session_id", data.session_id);
             partState.code = code;
             partState.preDone = data.pre_done;
             partState.postDone = data.post_done;

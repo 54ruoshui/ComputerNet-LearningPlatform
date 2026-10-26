@@ -524,3 +524,46 @@ class TestQuizStorage:
         empty.mkdir()
         tracker.migrate_legacy_quiz_json(str(empty))  # 不应抛错
         assert tracker.get_quiz_done_ids("default") == []
+
+
+class TestSessionOwnership:
+    """无账号体系下的会话归属：bind 先绑先得，claim 强制改绑（参试码 join）"""
+
+    def test_bind_get_list_unbind_roundtrip(self, tracker):
+        assert tracker.get_session_owner("s1") is None
+
+        tracker.bind_session("s1", "v1")
+        tracker.bind_session("s2", "v1")
+        tracker.bind_session("s3", "v2")
+        assert tracker.get_session_owner("s1") == "v1"
+        assert sorted(tracker.list_sessions_for_visitor("v1")) == ["s1", "s2"]
+        assert tracker.list_sessions_for_visitor("v2") == ["s3"]
+
+        tracker.unbind_session("s1")
+        assert tracker.get_session_owner("s1") is None
+        assert tracker.list_sessions_for_visitor("v1") == ["s2"]
+
+    def test_bind_first_wins(self, tracker):
+        tracker.bind_session("s1", "v1")
+        tracker.bind_session("s1", "v2")  # 后绑不覆盖
+        assert tracker.get_session_owner("s1") == "v1"
+
+    def test_claim_session_rebinds(self, tracker):
+        tracker.bind_session("s1", "v1")
+        tracker.claim_session("s1", "v2")  # 参试码 join 强制改绑
+        assert tracker.get_session_owner("s1") == "v2"
+        assert "s1" in tracker.list_sessions_for_visitor("v2")
+        assert "s1" not in tracker.list_sessions_for_visitor("v1")
+
+    def test_unbind_unknown_session_ok(self, tracker):
+        tracker.unbind_session("never-bound")  # 不抛错
+
+    def test_get_participant_by_session(self, tracker):
+        tracker.save_trial("tr-1", "t", {})
+        p1 = tracker.add_trial_participant("tr-1", "P0001")
+        tracker.bind_participant_session(p1["id"], "sess-9")
+
+        found = tracker.get_participant_by_session("sess-9")
+        assert found["id"] == p1["id"]
+        assert found["code"] == "P0001"
+        assert tracker.get_participant_by_session("unknown") is None

@@ -64,12 +64,14 @@ app = FastAPI(title="GraphRAG 知识图谱问答系统", version="2.0", lifespan
 
 # ==================== 中间件 ====================
 
-from web.middleware import APIKeyMiddleware, RequestIDMiddleware
+from web.middleware import APIKeyMiddleware, RequestIDMiddleware, VisitorMiddleware
 from web.rate_limiter import RateLimitMiddleware
 
 app.add_middleware(APIKeyMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(RequestIDMiddleware)
+# VisitorMiddleware 最后注册（最外层），保证 429/401 响应也能种访客 cookie
+app.add_middleware(VisitorMiddleware)
 
 app.mount("/static", StaticFiles(directory=static_folder), name="static")
 app.mount("/generated_images", StaticFiles(directory=generated_images_dir), name="generated_images")
