@@ -5,7 +5,7 @@ from typing import Dict
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 
-from web.deps import get_exam_service
+from web.deps import get_exam_service, require_admin
 from web.schemas import ExamSubmitRequest
 
 logger = structlog.get_logger(__name__)
@@ -37,7 +37,7 @@ def get_exam_paper(paper_id: str, service=Depends(get_exam_service)):
 
 
 @router.post("/papers/import")
-def import_exam_paper(data: Dict, service=Depends(get_exam_service)):
+def import_exam_paper(data: Dict, _admin: None = Depends(require_admin), service=Depends(get_exam_service)):
     try:
         paper_id = service.create_exam_paper(data)
         return {"success": True, "paper_id": paper_id}

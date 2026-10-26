@@ -31,18 +31,23 @@
 
     // ==================== API ====================
 
-    async function apiGet(url) {
-        const res = await fetch(url);
+    async function apiGet(url, headers) {
+        const res = await fetch(url, { headers: headers || {} });
         if (!res.ok) throw new Error(await errDetail(res));
         return res.json();
     }
 
-    async function apiPost(url, body) {
-        const opts = { method: "POST", headers: { "Content-Type": "application/json" } };
+    async function apiPost(url, body, headers) {
+        const opts = { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, headers || {}) };
         if (body !== undefined) opts.body = JSON.stringify(body);
         const res = await fetch(url, opts);
         if (!res.ok) throw new Error(await errDetail(res));
         return res.json();
+    }
+
+    function adminHeaders() {
+        const t = localStorage.getItem("aigc_admin_token") || "";
+        return t ? { "X-Admin-Token": t } : {};
     }
 
     async function errDetail(res) {
@@ -89,12 +94,26 @@
 
     // ==================== 研究管理：批次列表 ====================
 
+    window.saveAdminToken = function () {
+        const t = $("adminTokenInput").value.trim();
+        if (!t) { showToast("请输入管理口令", "error"); return; }
+        localStorage.setItem("aigc_admin_token", t);
+        showToast("口令已保存", "success");
+        loadTrials();
+    };
+
     async function loadTrials() {
+        const input = $("adminTokenInput");
+        if (input) input.value = localStorage.getItem("aigc_admin_token") || "";
+        if (!localStorage.getItem("aigc_admin_token")) {
+            $("trialList").innerHTML = '<p class="trial-hint">请先在上方输入管理口令，才能查看和管理试用批次。</p>';
+            return;
+        }
         try {
-            const data = await apiGet("/api/trial/list");
+            const data = await apiGet("/api/trial/list", adminHeaders());
             renderTrials(data.trials || []);
         } catch (e) {
-            $("trialList").innerHTML = '<p class="trial-hint">加载失败：' + escapeHtml(e.message) + "</p>";
+            $("trialList").innerHTML = '<p class="trial-hint">加载失败：' + escapeHtml(e.message) + "（口令可能不正确）</p>";
         }
     }
 
@@ -131,7 +150,7 @@
         if (seedRaw !== "") body.seed = parseInt(seedRaw, 10);
         $("createTrialBtn").disabled = true;
         try {
-            const created = await apiPost("/api/trial/create", body);
+            const created = await apiPost("/api/trial/create", body, adminHeaders());
             showToast("批次已创建：前测/后测各 " + created.question_count + " 题（seed=" + created.seed + "）", "success");
             $("trialName").value = "";
             loadTrials();
@@ -147,7 +166,7 @@
     window.openTrialDetail = async function (trialId) {
         selectedTrialId = trialId;
         try {
-            const data = await apiGet("/api/trial/" + encodeURIComponent(trialId) + "/participants");
+            const data = await apiGet("/api/trial/" + encodeURIComponent(trialId) + "/participants", adminHeaders());
             $("adminListView").style.display = "none";
             $("adminAnalysisView").style.display = "none";
             $("adminReportView").style.display = "none";
@@ -200,7 +219,7 @@
 
     window.addParticipant = async function () {
         try {
-            const p = await apiPost("/api/trial/" + encodeURIComponent(selectedTrialId) + "/participants", {});
+            const p = await apiPost("/api/trial/" + encodeURIComponent(selectedTrialId) + "/participants", {}, adminHeaders());
             showToast("已添加被试，参试码：" + p.code, "success");
             openTrialDetail(selectedTrialId);
         } catch (e) {
@@ -216,7 +235,7 @@
         $("adminAnalysisView").style.display = "block";
         $("analysisBody").innerHTML = '<p class="trial-hint">加载中...</p>';
         try {
-            const a = await apiGet("/api/trial/" + encodeURIComponent(selectedTrialId) + "/analysis");
+            const a = await apiGet("/api/trial/" + encodeURIComponent(selectedTrialId) + "/analysis", adminHeaders());
             renderAnalysis(a);
         } catch (e) {
             $("analysisBody").innerHTML = '<p class="trial-hint">加载失败：' + escapeHtml(e.message) + "</p>";
@@ -318,7 +337,7 @@
         $("adminReportView").style.display = "block";
         $("reportBody").innerHTML = '<p class="trial-hint"><i class="fas fa-spinner fa-spin"></i> LLM 生成中，请稍候...</p>';
         try {
-            const data = await apiPost("/api/trial/" + encodeURIComponent(selectedTrialId) + "/report");
+            const data = await apiPost("/api/trial/" + encodeURIComponent(selectedTrialId) + "/report", undefined, adminHeaders());
             lastReport = data.report || "";
             $("reportBody").innerHTML = '<pre class="trial-report">' + escapeHtml(lastReport) + "</pre>";
         } catch (e) {

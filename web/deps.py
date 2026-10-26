@@ -5,10 +5,11 @@ init_* 初始化函数与 get_* FastAPI 依赖（懒初始化 + double-checked l
 """
 
 import os
+import secrets
 import threading
 
 import structlog
-from fastapi import HTTPException
+from fastapi import Header, HTTPException
 
 from src.exceptions import GraphRAGError
 from src.settings import get_settings
@@ -170,6 +171,13 @@ def init_trial_service():
 
 
 # ==================== FastAPI 依赖（懒初始化语义与拆分前各路由一致） ====================
+
+def require_admin(x_admin_token: str = Header(default="")):
+    """管理端点口令校验（X-Admin-Token）。未配置 ADMIN_TOKEN 时一律拒绝（fail-closed）。"""
+    token = get_settings().admin_token
+    if not token or not secrets.compare_digest(x_admin_token, token):
+        raise HTTPException(status_code=401, detail="需要管理口令，请在请求头中设置 X-Admin-Token")
+
 
 def get_langgraph_engine():
     if not langgraph_engine:

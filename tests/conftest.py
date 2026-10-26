@@ -15,6 +15,7 @@ os.environ.setdefault("NEO4J_PASSWORD", "test-password")
 os.environ.setdefault("ZHIPUAI_API_KEY", "test-zhipuai-key")
 os.environ.setdefault("QWEN_API_KEY", "test-qwen-key")
 os.environ.setdefault("DASHSCOPE_API_KEY", "test-dashscope-key")
+os.environ.setdefault("ADMIN_TOKEN", "test-admin-token")
 
 
 @pytest.fixture(autouse=True)

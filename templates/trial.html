@@ -53,6 +53,18 @@
                     <!-- 批次列表视图 -->
                     <div id="adminListView">
                         <div class="trial-create-card">
+                            <div class="section-title"><i class="fas fa-key"></i> 管理口令</div>
+                            <div class="trial-create-form">
+                                <div class="form-group">
+                                    <label>输入服务器配置的 ADMIN_TOKEN 后才能使用研究管理功能（仅研究者需要，学生无需填写）</label>
+                                    <input id="adminTokenInput" type="password" placeholder="管理口令">
+                                </div>
+                                <button class="btn-trial-primary" id="saveAdminTokenBtn" onclick="saveAdminToken()">
+                                    <i class="fas fa-check"></i> 保存口令并加载
+                                </button>
+                            </div>
+                        </div>
+                        <div class="trial-create-card">
                             <div class="section-title"><i class="fas fa-plus-circle"></i> 创建试用批次</div>
                             <div class="trial-create-form">
                                 <div class="form-group">

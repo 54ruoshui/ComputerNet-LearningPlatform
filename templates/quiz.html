@@ -196,6 +196,13 @@
                         <div class="quiz-form" id="aiForm">
                             <div class="form-row">
                                 <div class="form-group">
+                                    <label>管理口令（出题与入库为教师功能，需服务器配置的 ADMIN_TOKEN）</label>
+                                    <input id="adminTokenInput" type="password" placeholder="管理口令"
+                                           onchange="saveAdminToken(this.value)">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
                                     <label>所属层次</label>
                                     <select id="aiLayer">
                                         <option value="">自动（按种子）</option>

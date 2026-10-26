@@ -30,13 +30,26 @@
         return res.json();
     }
 
-    async function apiPost(url, body) {
-        const opts = { method: "POST", headers: { "Content-Type": "application/json" } };
+    async function apiPost(url, body, headers) {
+        const opts = { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, headers || {}) };
         if (body !== undefined) opts.body = JSON.stringify(body);
         const res = await fetch(url, opts);
+        if (res.status === 401) throw new Error("需要管理口令（401），请先在面板中填写 ADMIN_TOKEN");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
     }
+
+    function adminHeaders() {
+        const t = localStorage.getItem("aigc_admin_token") || "";
+        return t ? { "X-Admin-Token": t } : {};
+    }
+
+    window.saveAdminToken = function (val) {
+        const t = (val || "").trim();
+        if (t) localStorage.setItem("aigc_admin_token", t);
+        else localStorage.removeItem("aigc_admin_token");
+        showToast(t ? "管理口令已保存" : "管理口令已清除", "success");
+    };
 
     async function apiDelete(url, body) {
         const opts = { method: "DELETE", headers: { "Content-Type": "application/json" } };
@@ -514,7 +527,7 @@
             if (!data[k]) { showToast("请填写所有必填字段", "error"); return; }
         }
         try {
-            await apiPost("/api/quiz/questions", data);
+            await apiPost("/api/quiz/questions", data, adminHeaders());
             showToast("题目添加成功！", "success");
             ["fText","fA","fB","fC","fD","fExplanation","fChapter"].forEach(id => {
                 const el = $(id);
@@ -549,7 +562,7 @@
                 difficulty: $("aiDiff").value || null,
                 count: count,
                 seed_entities: seeds,
-            });
+            }, adminHeaders());
             aiGenerated = data.questions || [];
             renderAiCards();
             showToast(`生成 ${aiGenerated.length} 道题（种子：${(data.seed_entities || []).join("、") || "随机"}），请预览确认后入库`,
@@ -627,7 +640,7 @@
             if (!payload[k]) { showToast("请填写所有必填字段", "error"); return; }
         }
         try {
-            await apiPost("/api/quiz/questions", payload);
+            await apiPost("/api/quiz/questions", payload, adminHeaders());
             card.classList.add("saved");
             card.querySelectorAll("textarea,input,select,button").forEach(el => el.disabled = true);
             showToast("题目已入库", "success");

@@ -3,7 +3,7 @@
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 
-from web.deps import get_trial_service
+from web.deps import get_trial_service, require_admin
 from web.schemas import (
     TrialCreateRequest,
     TrialJoinRequest,
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/trial", tags=["trial"])
 
 
 @router.post("/create")
-def create_trial(req: TrialCreateRequest, service=Depends(get_trial_service)):
+def create_trial(req: TrialCreateRequest, _admin: None = Depends(require_admin), service=Depends(get_trial_service)):
     try:
         return service.create_trial(req.name, per_layer=req.per_layer, seed=req.seed)
     except HTTPException:
@@ -31,7 +31,7 @@ def create_trial(req: TrialCreateRequest, service=Depends(get_trial_service)):
 
 
 @router.get("/list")
-def list_trials(service=Depends(get_trial_service)):
+def list_trials(_admin: None = Depends(require_admin), service=Depends(get_trial_service)):
     try:
         return {"trials": service.list_trials()}
     except HTTPException:
@@ -42,7 +42,7 @@ def list_trials(service=Depends(get_trial_service)):
 
 
 @router.post("/{trial_id}/participants")
-def add_trial_participant(trial_id: str, req: TrialParticipantRequest, service=Depends(get_trial_service)):
+def add_trial_participant(trial_id: str, req: TrialParticipantRequest, _admin: None = Depends(require_admin), service=Depends(get_trial_service)):
     try:
         participant = service.add_participant(trial_id, req.code)
         return participant
@@ -56,7 +56,7 @@ def add_trial_participant(trial_id: str, req: TrialParticipantRequest, service=D
 
 
 @router.get("/{trial_id}/participants")
-def list_trial_participants(trial_id: str, service=Depends(get_trial_service)):
+def list_trial_participants(trial_id: str, _admin: None = Depends(require_admin), service=Depends(get_trial_service)):
     try:
         return {"participants": service.list_participants(trial_id)}
     except HTTPException:
@@ -108,7 +108,7 @@ def submit_trial_test(req: TrialTestSubmitRequest, service=Depends(get_trial_ser
 
 
 @router.get("/{trial_id}/analysis")
-def get_trial_analysis(trial_id: str, service=Depends(get_trial_service)):
+def get_trial_analysis(trial_id: str, _admin: None = Depends(require_admin), service=Depends(get_trial_service)):
     try:
         return service.get_analysis(trial_id)
     except HTTPException:
@@ -121,7 +121,7 @@ def get_trial_analysis(trial_id: str, service=Depends(get_trial_service)):
 
 
 @router.post("/{trial_id}/report")
-def generate_trial_report(trial_id: str, service=Depends(get_trial_service)):
+def generate_trial_report(trial_id: str, _admin: None = Depends(require_admin), service=Depends(get_trial_service)):
     try:
         report = service.generate_report(trial_id)
         if report is None:

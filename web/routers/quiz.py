@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from src.exceptions import GraphRAGError
 from web import deps
-from web.deps import get_question_generator, get_quiz_service
+from web.deps import get_question_generator, get_quiz_service, require_admin
 from web.schemas import (
     MCQuestionCreate,
     QuizAnswerRequest,
@@ -91,7 +91,7 @@ def get_quiz_stats(service=Depends(get_quiz_service)):
 
 
 @router.post("/questions")
-def create_quiz_question(req: MCQuestionCreate, service=Depends(get_quiz_service)):
+def create_quiz_question(req: MCQuestionCreate, _admin: None = Depends(require_admin), service=Depends(get_quiz_service)):
     try:
         q_id = service.add_question(req.model_dump())
         return {"success": True, "question_id": q_id}
@@ -101,7 +101,7 @@ def create_quiz_question(req: MCQuestionCreate, service=Depends(get_quiz_service
 
 
 @router.post("/generate")
-def generate_quiz_questions(req: QuizGenerateRequest, generator=Depends(get_question_generator)):
+def generate_quiz_questions(req: QuizGenerateRequest, _admin: None = Depends(require_admin), generator=Depends(get_question_generator)):
     try:
         result = generator.generate(
             layer=req.layer,

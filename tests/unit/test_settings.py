@@ -91,8 +91,13 @@ class TestDefaults:
     def test_optional_fields_default_empty(self):
         s = self._make_settings()
         assert s.api_key == ""
+        assert s.admin_token == ""
         assert s.qwen_api_key == ""
         assert s.dashscope_api_key == ""
+
+    def test_admin_token_read_from_env(self):
+        s = self._make_settings(ADMIN_TOKEN="secret-token")
+        assert s.admin_token == "secret-token"
 
 
 # ---------- 字段约束 ----------

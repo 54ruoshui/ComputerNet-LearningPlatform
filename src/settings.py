@@ -51,6 +51,7 @@ class Settings(BaseSettings):
 
     # Auth
     api_key: str = ""
+    admin_token: str = ""
 
     # Logging
     log_level: str = "INFO"

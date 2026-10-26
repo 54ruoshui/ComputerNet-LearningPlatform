@@ -160,6 +160,7 @@ def client_with_quiz(mock_engine):
     with patch("web.middleware.get_settings") as mock_mw:
         mock_mw.return_value = MagicMock(api_key="")
         c = TestClient(web_mod.app)
+        c.headers.update({"X-Admin-Token": "test-admin-token"})
         yield c, mock_quiz, mock_gen
 
     web_mod.deps.langgraph_engine = orig["engine"]
@@ -391,7 +392,10 @@ class TestQuizGenerateEndpoint:
         orig = web_mod.deps.question_generator
         web_mod.deps.question_generator = None
         try:
-            resp = client.post("/api/quiz/generate", json={"count": 1})
+            resp = client.post(
+                "/api/quiz/generate", json={"count": 1},
+                headers={"X-Admin-Token": "test-admin-token"},
+            )
             assert resp.status_code in (503, 500)
         finally:
             web_mod.deps.question_generator = orig
@@ -428,6 +432,38 @@ class TestCreateQuestionSource:
         client, _, _ = client_with_quiz
         resp = client.post("/api/quiz/questions", json={**self.VALID, "source": "web"})
         assert resp.status_code == 422
+
+
+# ---------- Admin Auth（X-Admin-Token） ----------
+
+class TestAdminAuth:
+
+    ADMIN = {"X-Admin-Token": "test-admin-token"}
+
+    def test_admin_endpoints_reject_missing_token(self, client):
+        assert client.get("/api/trial/list").status_code == 401
+        assert client.post("/api/quiz/questions", json={}).status_code == 401
+        assert client.post("/api/quiz/generate", json={"count": 1}).status_code == 401
+        assert client.post("/api/exam/papers/import", json={}).status_code == 401
+
+    def test_admin_endpoints_reject_wrong_token(self, client):
+        resp = client.get("/api/trial/list", headers={"X-Admin-Token": "wrong"})
+        assert resp.status_code == 401
+
+    def test_correct_token_passes_auth(self, client):
+        # 通过鉴权后落到服务未初始化（trial_service 为 None → 503），证明口令校验已放行
+        resp = client.get("/api/trial/list", headers=self.ADMIN)
+        assert resp.status_code == 503
+
+    def test_missing_token_401_wins_over_body_validation(self, client):
+        # 依赖先于 body 校验执行：无口令时即使 body 非法也返回 401 而非 422
+        resp = client.post("/api/trial/create", json={"per_layer": "not-an-int"})
+        assert resp.status_code == 401
+
+    def test_student_endpoints_need_no_token(self, client):
+        # join 是学生端点：无口令不应 401（此处服务未初始化为 503）
+        resp = client.post("/api/trial/join", json={"code": "P0001", "session_id": "s"})
+        assert resp.status_code != 401
 
 
 # ---------- Error Handling ----------
@@ -495,6 +531,7 @@ def client_with_trial(mock_engine):
     with patch("web.middleware.get_settings") as mock_mw:
         mock_mw.return_value = MagicMock(api_key="")
         c = TestClient(web_mod.app)
+        c.headers.update({"X-Admin-Token": "test-admin-token"})
         yield c, mock_trial
 
     web_mod.deps.langgraph_engine = orig["engine"]
@@ -505,7 +542,9 @@ class TestTrialEndpoints:
 
     def test_returns_503_when_not_initialized(self, client):
         # client fixture: mastery_service 无 tracker → init 失败 → 503
-        resp = client.get("/api/trial/list")
+        resp = client.get(
+            "/api/trial/list", headers={"X-Admin-Token": "test-admin-token"}
+        )
         assert resp.status_code == 503
 
     def test_create_trial(self, client_with_trial):
