@@ -1,10 +1,21 @@
 """FastAPI 端到端集成测试 — httpx + TestClient"""
 
 import json
+import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
 from starlette.testclient import TestClient
+
+from web import concurrency as concurrency_mod
+from web.concurrency import LLMConcurrencyGate
+
+
+def install_gate(monkeypatch, max_concurrency: int, queue_timeout: float) -> LLMConcurrencyGate:
+    """直接把小容量闸门装进单例位（不依赖环境变量与 Settings 缓存的时序）"""
+    gate = LLMConcurrencyGate(max_concurrency, queue_timeout)
+    monkeypatch.setattr(concurrency_mod, "_gate", gate)
+    return gate
 
 
 # ---------- Fixtures ----------
@@ -820,3 +831,145 @@ class TestQuizDoneWrongEndpoints:
         assert resp.status_code == 503
         resp = client.post("/api/quiz/wrong", json=self.WRONG_BODY)
         assert resp.status_code == 503
+
+
+# ---------- LLM 并发闸门 ----------
+
+@pytest.fixture
+def client_with_exam(mock_engine):
+    """注入 mock exam_service，测交卷 + 薄弱点分析闸门降级"""
+    import web.graph_rag_web as web_mod
+
+    mock_exam = MagicMock()
+    mock_exam.submit_exam.return_value = {
+        "paper_id": "paper-1", "score": 80,
+        "details": [
+            {"question_id": "q1", "correct": True},
+            {"question_id": "q2", "correct": False},
+        ],
+    }
+    mock_exam.analyze_weaknesses.return_value = {"weaknesses": ["网络层"]}
+
+    orig = {
+        "engine": web_mod.deps.langgraph_engine,
+        "exam_service": web_mod.deps.exam_service,
+    }
+    web_mod.deps.langgraph_engine = mock_engine
+    web_mod.deps.exam_service = mock_exam
+
+    with patch("web.middleware.get_settings") as mock_mw:
+        mock_mw.return_value = MagicMock(api_key="")
+        c = TestClient(web_mod.app)
+        yield c, mock_exam
+
+    web_mod.deps.langgraph_engine = orig["engine"]
+    web_mod.deps.exam_service = orig["exam_service"]
+
+
+@pytest.fixture
+def client_with_dashboard(mock_engine):
+    """注入 mock dashboard_service，测学习报告端点"""
+    import web.graph_rag_web as web_mod
+
+    mock_dash = MagicMock()
+    mock_dash.generate_report.return_value = "# 学习报告\n正文"
+
+    orig = {
+        "engine": web_mod.deps.langgraph_engine,
+        "dashboard_service": web_mod.deps.dashboard_service,
+    }
+    web_mod.deps.langgraph_engine = mock_engine
+    web_mod.deps.dashboard_service = mock_dash
+
+    with patch("web.middleware.get_settings") as mock_mw:
+        mock_mw.return_value = MagicMock(api_key="")
+        c = TestClient(web_mod.app)
+        yield c, mock_dash
+
+    web_mod.deps.langgraph_engine = orig["engine"]
+    web_mod.deps.dashboard_service = orig["dashboard_service"]
+
+
+class TestQueryConcurrencyGate:
+
+    def test_second_query_503_when_gate_full(self, client, mock_engine, monkeypatch):
+        """max=1 且第一个查询阻塞时，第二个并发查询排队超时 → 503"""
+        install_gate(monkeypatch, 1, 0.2)
+
+        started = threading.Event()
+        release = threading.Event()
+
+        def slow_query(*args, **kwargs):
+            started.set()
+            release.wait(timeout=5)
+            return {"question": "q", "answer": "a", "processing_time": 0.1, "session_id": "s"}
+
+        mock_engine.query.side_effect = slow_query
+
+        statuses = []
+
+        def do_query():
+            statuses.append(client.post("/api/query", json={"question": "q"}).status_code)
+
+        first = threading.Thread(target=do_query)
+        first.start()
+        assert started.wait(timeout=2)  # 第一个请求已进入 LLM，闸门被占
+        second = threading.Thread(target=do_query)
+        second.start()
+        second.join(timeout=5)
+        release.set()
+        first.join(timeout=5)
+
+        assert sorted(statuses) == [200, 503]
+
+    def test_stream_returns_sse_error_when_gate_full(self, client, mock_engine, monkeypatch):
+        """闸满时流式端点返回单条 SSE error 事件（前端已有对应处理）"""
+        gate = install_gate(monkeypatch, 1, 0.2)
+        assert gate.acquire()  # 手动占满
+        try:
+            resp = client.post("/api/query/stream", json={"question": "q"})
+            assert resp.status_code == 200
+            assert "event: error" in resp.text
+            assert "查询人数较多" in resp.text
+        finally:
+            gate.release()
+
+    def test_dashboard_report_503_when_gate_full(self, client_with_dashboard, monkeypatch):
+        client, _ = client_with_dashboard
+        gate = install_gate(monkeypatch, 1, 0.2)
+        assert gate.acquire()
+        try:
+            resp = client.post("/api/dashboard/report/some-session")
+            assert resp.status_code == 503
+        finally:
+            gate.release()
+
+
+class TestExamGateDegradation:
+
+    def test_submit_skips_analysis_when_gate_full(self, client_with_exam, monkeypatch):
+        """闸满时交卷照常判分，仅跳过 LLM 分析（analysis=None）"""
+        client, mock_exam = client_with_exam
+        gate = install_gate(monkeypatch, 1, 0.2)
+        assert gate.acquire()  # 占满闸门模拟 LLM 高峰
+        try:
+            resp = client.post("/api/exam/submit", json={
+                "session_id": "s1", "paper_id": "paper-1", "answers": {"q1": "A"},
+            })
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["score"] == 80  # 判分不受影响
+            assert body["analysis"] is None  # 分析被优雅跳过
+            mock_exam.analyze_weaknesses.assert_not_called()
+        finally:
+            gate.release()
+
+    def test_submit_runs_analysis_when_gate_free(self, client_with_exam, monkeypatch):
+        client, mock_exam = client_with_exam
+        install_gate(monkeypatch, 1, 1.0)
+        resp = client.post("/api/exam/submit", json={
+            "session_id": "s1", "paper_id": "paper-1", "answers": {"q1": "A"},
+        })
+        assert resp.status_code == 200
+        assert resp.json()["analysis"] == {"weaknesses": ["网络层"]}
+        mock_exam.analyze_weaknesses.assert_called_once()

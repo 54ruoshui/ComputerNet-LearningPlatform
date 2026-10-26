@@ -25,3 +25,19 @@ def _reset_settings_cache():
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_concurrency_gate():
+    """每个测试前后重置 LLM 并发闸门（防测试用小容量闸门泄漏到其他用例）"""
+    try:
+        from web.concurrency import reset_gate
+        reset_gate()
+    except ImportError:
+        pass
+    yield
+    try:
+        from web.concurrency import reset_gate
+        reset_gate()
+    except ImportError:
+        pass

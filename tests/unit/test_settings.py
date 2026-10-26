@@ -99,6 +99,16 @@ class TestDefaults:
         s = self._make_settings(ADMIN_TOKEN="secret-token")
         assert s.admin_token == "secret-token"
 
+    def test_concurrency_gate_defaults(self):
+        s = self._make_settings()
+        assert s.agent_max_concurrency == 6
+        assert s.agent_queue_timeout == 120.0
+
+    def test_concurrency_gate_read_from_env(self):
+        s = self._make_settings(AGENT_MAX_CONCURRENCY="3", AGENT_QUEUE_TIMEOUT="30")
+        assert s.agent_max_concurrency == 3
+        assert s.agent_queue_timeout == 30.0
+
 
 # ---------- 字段约束 ----------
 

@@ -5,6 +5,7 @@ from typing import Dict
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 
+from web.concurrency import get_gate
 from web.deps import get_exam_service, require_admin
 from web.schemas import ExamSubmitRequest
 
@@ -55,12 +56,19 @@ def submit_exam(req: ExamSubmitRequest, service=Depends(get_exam_service)):
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
 
-        # 附加 LLM 分析
+        # 附加 LLM 分析（判分不设闸：闸满时跳过分析，学生答题数据不丢）
         wrong_details = [d for d in result.get("details", []) if not d.get("correct")]
-        analysis = service.analyze_weaknesses(
-            session_id=req.session_id, wrong_details=wrong_details
-        )
-        result["analysis"] = analysis
+        gate = get_gate()
+        if gate.acquire():
+            try:
+                result["analysis"] = service.analyze_weaknesses(
+                    session_id=req.session_id, wrong_details=wrong_details
+                )
+            finally:
+                gate.release()
+        else:
+            logger.warning("LLM 并发闸门已满，跳过试卷薄弱点分析", session_id=req.session_id)
+            result["analysis"] = None
 
         # 附加错误统计
         if req.session_id:

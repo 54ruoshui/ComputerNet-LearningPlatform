@@ -37,8 +37,8 @@ os.makedirs(generated_images_dir, exist_ok=True)
 async def lifespan(app: FastAPI):
     import anyio.to_thread
 
-    # def 路由走 anyio 默认线程池（默认 40），并发场景下适当放大
-    anyio.to_thread.current_default_thread_limiter().total_tokens = 64
+    # def 路由走 anyio 默认线程池（默认 40），班级并发下放大到 128
+    anyio.to_thread.current_default_thread_limiter().total_tokens = 128
 
     s = get_settings()
     if not s.fast_start:

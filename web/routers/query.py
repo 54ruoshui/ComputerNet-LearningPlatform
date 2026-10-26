@@ -1,6 +1,7 @@
 """核心查询 + 会话记忆 API（会话归属按访客 cookie 隔离）"""
 
 import asyncio
+import json
 from datetime import datetime
 
 import structlog
@@ -9,12 +10,15 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.logging_config import session_id_var
 from web import deps
+from web.concurrency import get_gate
 from web.deps import get_langgraph_engine
 from web.schemas import QueryRequest
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["query"])
+
+GATE_BUSY_MESSAGE = "当前查询人数较多，请稍后重试"
 
 
 def _visitor(request: Request) -> str | None:
@@ -71,38 +75,44 @@ def query(req: QueryRequest, request: Request, engine=Depends(get_langgraph_engi
 
         logger.info("LangGraph 查询", session_id=req.session_id, question=req.question[:100])
 
-        mastery_context = ""
-        if req.session_id and deps.mastery_service:
-            mastery_context = deps.mastery_service.build_mastery_context(req.session_id)
-
-        response = engine.query(
-            req.question,
-            session_id=req.session_id,
-            mastery_context=mastery_context,
-        )
-
-        result = {
-            "question": response.get("question", req.question),
-            "answer": response.get("answer", "未获取到答案"),
-            "processing_time": response.get("processing_time", 0),
-            "timestamp": datetime.now().isoformat(),
-            "session_id": response.get("session_id"),
-        }
-
+        gate = get_gate()
+        if not gate.acquire():
+            raise HTTPException(status_code=503, detail=GATE_BUSY_MESSAGE)
         try:
-            entity_names = deps.entity_service.get_all_entity_names() if deps.entity_service else []
-            extracted = deps.entity_service.extract_entities_from_text(
-                req.question + " " + result["answer"], entity_names
-            ) if deps.entity_service else []
-            result["extracted_entities"] = extracted[:10]
-        except Exception:
-            result["extracted_entities"] = []
-        if response.get("context_length"):
-            result["context_length"] = response["context_length"]
-        if response.get("graph_data"):
-            result["graph_data"] = response["graph_data"]
+            mastery_context = ""
+            if req.session_id and deps.mastery_service:
+                mastery_context = deps.mastery_service.build_mastery_context(req.session_id)
 
-        return JSONResponse(content=result)
+            response = engine.query(
+                req.question,
+                session_id=req.session_id,
+                mastery_context=mastery_context,
+            )
+
+            result = {
+                "question": response.get("question", req.question),
+                "answer": response.get("answer", "未获取到答案"),
+                "processing_time": response.get("processing_time", 0),
+                "timestamp": datetime.now().isoformat(),
+                "session_id": response.get("session_id"),
+            }
+
+            try:
+                entity_names = deps.entity_service.get_all_entity_names() if deps.entity_service else []
+                extracted = deps.entity_service.extract_entities_from_text(
+                    req.question + " " + result["answer"], entity_names
+                ) if deps.entity_service else []
+                result["extracted_entities"] = extracted[:10]
+            except Exception:
+                result["extracted_entities"] = []
+            if response.get("context_length"):
+                result["context_length"] = response["context_length"]
+            if response.get("graph_data"):
+                result["graph_data"] = response["graph_data"]
+
+            return JSONResponse(content=result)
+        finally:
+            gate.release()
     except HTTPException:
         raise
     except Exception as e:
@@ -124,12 +134,34 @@ async def query_stream(req: QueryRequest, request: Request, engine=Depends(get_l
             deps.mastery_service.build_mastery_context, req.session_id
         )
 
+    gate = get_gate()
+    if not await gate.acquire_async():
+        async def _busy_stream():
+            yield f'event: error\ndata: {json.dumps({"msg": GATE_BUSY_MESSAGE}, ensure_ascii=False)}\n\n'
+
+        return StreamingResponse(
+            _busy_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    async def _gated():
+        try:
+            async for chunk in engine.query_stream(
+                req.question,
+                session_id=req.session_id,
+                mastery_context=mastery_context,
+            ):
+                yield chunk
+        finally:
+            gate.release()  # 客户端断开（生成器被关闭）也会走到这里
+
     return StreamingResponse(
-        engine.query_stream(
-            req.question,
-            session_id=req.session_id,
-            mastery_context=mastery_context,
-        ),
+        _gated(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

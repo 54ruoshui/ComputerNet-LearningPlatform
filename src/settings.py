@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     # Fast start
     fast_start: bool = False
 
+    # LLM 并发闸门（单进程下限制同时进行的 LLM 长任务数）
+    agent_max_concurrency: int = Field(default=6, ge=1)
+    agent_queue_timeout: float = Field(default=120.0, ge=0)
+
     @field_validator("log_level")
     @classmethod
     def validate_log_level(cls, v: str) -> str:
