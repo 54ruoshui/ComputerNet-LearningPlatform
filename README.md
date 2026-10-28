@@ -227,7 +227,7 @@ aigc/
 | `/api/quiz/questions` | GET | 获取题目（`?layer=&difficulty=&limit=`）|
 | `/api/quiz/answer` | POST | 提交答案（联动掌握度，`{question_id, selected_answer, session_id?}`）|
 | `/api/quiz/stats` | GET | 题目统计 |
-| `/api/quiz/questions` | POST | 新增题目 |
+| `/api/quiz/questions` | POST | 新增题目（🔒 `X-Admin-Token`）|
 | `/api/quiz/done` | GET | 已做题目 ID 列表 |
 | `/api/quiz/wrong` | GET/POST/DELETE | 错题管理 |
 
@@ -254,14 +254,14 @@ aigc/
 
 | 端点 | 方法 | 描述 |
 |------|------|------|
-| `/api/trial/create` | POST | 创建试用批次并生成平行卷（`{name, per_layer, seed?}`）|
-| `/api/trial/list` | GET | 批次列表 |
-| `/api/trial/{id}/participants` | GET/POST | 被试管理（POST 缺省自动生成参试码）|
-| `/api/trial/join` | POST | 被试凭码加入并绑定学习会话 |
+| `/api/trial/create` | POST | 创建试用批次并生成平行卷（`{name, per_layer, seed?}`，🔒 `X-Admin-Token`）|
+| `/api/trial/list` | GET | 批次列表（🔒 `X-Admin-Token`）|
+| `/api/trial/{id}/participants` | GET/POST | 被试管理（POST 缺省自动生成参试码，🔒 `X-Admin-Token`）|
+| `/api/trial/join` | POST | 被试凭码加入并协商学习会话（响应 `session_id` 为应使用会话）|
 | `/api/trial/test/start` | POST | 开始前测/后测（`{code, phase}`，题目不含答案）|
 | `/api/trial/test/submit` | POST | 整卷提交批改（`{test_id, answers}`）|
-| `/api/trial/{id}/analysis` | GET | 前后测效果分析（整体/分层/行为/满意度）|
-| `/api/trial/{id}/report` | POST | LLM 生成用户试用评估报告 |
+| `/api/trial/{id}/analysis` | GET | 前后测效果分析（整体/分层/行为/满意度，🔒 `X-Admin-Token`）|
+| `/api/trial/{id}/report` | POST | LLM 生成用户试用评估报告（🔒 `X-Admin-Token`）|
 
 ### 系统
 
