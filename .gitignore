@@ -38,6 +38,9 @@ graphrag_checkpoints.db
 
 # Generated
 quality_metrics_export.json
+
+# 中期检查表（不入库）
+docs/*中期检查*
  
 requirements/
 
