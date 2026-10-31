@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>账号登录 - GraphRAG</title>
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style-new.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/login.css') }}">
+</head>
+<body>
+    <div class="quiz-app-layout">
+        <main class="quiz-main">
+            <header class="quiz-topbar">
+                <div class="topbar-left">
+                    <span class="current-label">账号</span>
+                </div>
+                <div class="topbar-right">
+                    <a href="/" class="topbar-btn">
+                        <i class="fas fa-comments"></i>
+                        <span>问答</span>
+                    </a>
+                    <a href="/quiz" class="topbar-btn">
+                        <i class="fas fa-pen-to-square"></i>
+                        <span>刷题</span>
+                    </a>
+                </div>
+            </header>
+
+            <div class="quiz-content auth-content">
+                <div class="auth-card">
+                    <div class="auth-icon"><i class="fas fa-user-circle"></i></div>
+                    <div class="auth-tabs">
+                        <button class="auth-tab active" id="tabLogin" onclick="switchMode('login')">登录</button>
+                        <button class="auth-tab" id="tabRegister" onclick="switchMode('register')">注册</button>
+                    </div>
+
+                    <form id="authForm" onsubmit="submitAuth(event)">
+                        <div class="form-group">
+                            <label for="email">邮箱</label>
+                            <input id="email" type="email" placeholder="例如 student@qq.com" autocomplete="email" maxlength="254" required>
+                        </div>
+                        <div class="form-group register-only" id="nicknameGroup" style="display:none;">
+                            <label for="nickname">昵称</label>
+                            <input id="nickname" type="text" placeholder="页面顶部显示的名字" autocomplete="nickname" maxlength="20">
+                        </div>
+                        <div class="form-group">
+                            <label for="password">密码</label>
+                            <input id="password" type="password" placeholder="至少 8 位" autocomplete="current-password" maxlength="128" required>
+                        </div>
+                        <div class="form-group register-only" id="confirmGroup" style="display:none;">
+                            <label for="passwordConfirm">确认密码</label>
+                            <input id="passwordConfirm" type="password" placeholder="再输入一次" autocomplete="new-password" maxlength="128">
+                        </div>
+                        <div id="authError" class="auth-error" style="display:none;"></div>
+                        <button type="submit" class="auth-submit" id="authSubmitBtn">
+                            <i class="fas fa-right-to-bracket"></i> <span id="authSubmitLabel">登录</span>
+                        </button>
+                    </form>
+
+                    <p class="auth-hint">
+                        <i class="fas fa-circle-info"></i>
+                        不登录也可以作为游客直接使用；登录后学习记录跟随账号，换设备登录即可恢复。
+                    </p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', path='js/login-app.js') }}"></script>
+</body>
+</html>

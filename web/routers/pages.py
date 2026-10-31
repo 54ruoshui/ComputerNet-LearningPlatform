@@ -41,3 +41,8 @@ def dashboard_page(request: Request):
 @router.get("/trial", response_class=HTMLResponse)
 def trial_page(request: Request):
     return templates.TemplateResponse(request, "trial.html")
+
+
+@router.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    return templates.TemplateResponse(request, "login.html")
