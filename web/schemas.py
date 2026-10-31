@@ -10,6 +10,21 @@ class QueryRequest(BaseModel):
     session_id: Optional[str] = None
 
 
+class RegisterRequest(BaseModel):
+    # 邮箱仅作登录标识（无 SMTP 验证），用正则校验避免引入 email-validator
+    email: str = Field(..., min_length=3, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    password: str = Field(..., min_length=8, max_length=128)
+    nickname: str = Field(..., min_length=1, max_length=20)
+    session_id: Optional[str] = Field(default=None, max_length=64)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=254)
+    # 登录不做密码长度下限校验，避免泄露密码策略
+    password: str = Field(..., min_length=1, max_length=128)
+    session_id: Optional[str] = Field(default=None, max_length=64)
+
+
 class ExportRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=500, description="导出查询")
 

@@ -12,8 +12,9 @@ from starlette.responses import JSONResponse
 from src.logging_config import new_request_id
 from src.settings import get_settings
 
-# 白名单路径（不需要认证）
-PUBLIC_PATHS = {"/", "/quiz", "/review", "/docs", "/openapi.json", "/redoc", "/api/health"}
+# 白名单路径（不需要认证）；/api/auth/ 前缀整体放行（浏览器 cookie 调用，端点各自鉴权）
+PUBLIC_PATHS = {"/", "/quiz", "/review", "/login", "/docs", "/openapi.json", "/redoc", "/api/health"}
+PUBLIC_PATH_PREFIXES = ("/api/auth/",)
 
 
 class APIKeyMiddleware:
@@ -34,7 +35,7 @@ class APIKeyMiddleware:
         path = scope["path"]
 
         # 白名单路径放行
-        if path in PUBLIC_PATHS:
+        if path in PUBLIC_PATHS or path.startswith(PUBLIC_PATH_PREFIXES):
             await self.app(scope, receive, send)
             return
 

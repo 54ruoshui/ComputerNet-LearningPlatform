@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     # Auth
     api_key: str = ""
     admin_token: str = ""
+    # 账号登录（可选登录，叠加在访客 cookie 之上）
+    auth_token_days: int = Field(default=30, ge=1, le=90)
+    auth_max_login_failures: int = Field(default=5, ge=1, le=20)
+    auth_lockout_minutes: int = Field(default=10, ge=1, le=1440)
 
     # Logging
     log_level: str = "INFO"

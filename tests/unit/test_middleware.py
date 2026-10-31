@@ -36,6 +36,10 @@ def test_app():
     async def sessions():
         return {"sessions": []}
 
+    @app.get("/api/auth/me")
+    async def auth_me():
+        return {"user": None}
+
     return app
 
 
@@ -123,6 +127,19 @@ class TestPublicPaths:
         mock_get_settings.return_value = MagicMock(api_key="secret123")
         resp = client.get("/api/query")
         assert resp.status_code == 401
+
+    @patch("web.middleware.get_settings")
+    def test_login_page_no_auth(self, mock_get_settings, client):
+        mock_get_settings.return_value = MagicMock(api_key="secret123")
+        resp = client.get("/login")
+        # 最小 app 未注册 /login 路由，但中间件应放行（404 而非 401 证明未拦截）
+        assert resp.status_code == 404
+
+    @patch("web.middleware.get_settings")
+    def test_auth_prefix_no_auth(self, mock_get_settings, client):
+        mock_get_settings.return_value = MagicMock(api_key="secret123")
+        resp = client.get("/api/auth/me")
+        assert resp.status_code == 200
 
     @patch("web.middleware.get_settings")
     def test_sessions_requires_auth(self, mock_get_settings, client):

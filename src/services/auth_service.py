@@ -248,7 +248,7 @@ class AuthService:
             )
             self.conn.commit()
 
-        token = self._issue_token(user_id)
+        token = self.issue_token(user_id)
 
         # 当前浏览器会话先绑先得地 attach 到账号（已被他人绑定则跳过，视同无当前会话）
         if current_session_id and current_session_id != "default":
@@ -354,7 +354,7 @@ class AuthService:
 
     # ==================== 内部 ====================
 
-    def _issue_token(self, user_id: int) -> str:
+    def issue_token(self, user_id: int) -> str:
         token = secrets.token_urlsafe(32)
         expires_at = (
             datetime.fromisoformat(_utcnow()) + timedelta(days=self._token_days)

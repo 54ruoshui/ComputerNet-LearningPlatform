@@ -29,6 +29,7 @@ exam_service = None
 dashboard_service = None
 question_generator = None
 trial_service = None
+auth_service = None
 
 _init_lock = threading.Lock()
 
@@ -170,6 +171,24 @@ def init_trial_service():
         trial_service = None
 
 
+def init_auth_service():
+    global auth_service
+    try:
+        from src.services.auth_service import AuthService
+        s = get_settings()
+        auth_service = AuthService(
+            db_path=os.path.join(project_root, "data", "memory", "mastery.db"),
+            tracker=_get_tracker(),
+            token_days=s.auth_token_days,
+            max_failures=s.auth_max_login_failures,
+            lockout_minutes=s.auth_lockout_minutes,
+        )
+        logger.info("AuthService 初始化完成")
+    except Exception as e:
+        logger.error("AuthService 初始化失败", error=str(e))
+        auth_service = None
+
+
 # ==================== FastAPI 依赖（懒初始化语义与拆分前各路由一致） ====================
 
 def require_admin(x_admin_token: str = Header(default="")):
@@ -240,6 +259,25 @@ def get_trial_service():
     return trial_service
 
 
+def get_auth_service():
+    # 不依赖 langgraph_engine（auth 只需 SQLite，tracker 缺失时服务自身降级）
+    if not auth_service:
+        with _init_lock:
+            if not auth_service:
+                init_auth_service()
+    if not auth_service:
+        raise HTTPException(status_code=503, detail="账号服务未初始化")
+    return auth_service
+
+
+def resolve_user(request) -> dict | None:
+    """从 aigc_user cookie 解析当前登录用户；游客/异常一律 None（auth 是可选叠加层）"""
+    if not auth_service:
+        return None
+    token = request.cookies.get("aigc_user")
+    return auth_service.resolve_user(token)
+
+
 def get_image_generator():
     if not image_generator:
         with _init_lock:
@@ -254,7 +292,7 @@ def get_image_generator():
 
 def shutdown():
     logger.info("正在清理资源...")
-    for component in [mastery_service, langgraph_engine]:
+    for component in [mastery_service, auth_service, langgraph_engine]:
         if component and hasattr(component, 'close'):
             try:
                 component.close()

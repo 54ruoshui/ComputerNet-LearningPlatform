@@ -23,6 +23,8 @@ IP_LIMITS = {
     "/api/quiz/generate":  (60, 30),    # LLM 出题（管理端，收紧）
     "/api/generate_image": (60, 30),
     "/api/trial/report":   (60, 30),    # LLM 生成评估报告（管理端，收紧）
+    "/api/auth/login":     (60, 60),    # 登录防爆破下限（主力是每账号失败锁定，NAT 下 IP 桶不能太紧）
+    "/api/auth/register":  (60, 60),
 }
 IP_DEFAULT_LIMIT = (60, 1800)
 

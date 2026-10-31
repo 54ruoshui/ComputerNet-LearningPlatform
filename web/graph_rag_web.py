@@ -48,6 +48,7 @@ async def lifespan(app: FastAPI):
             logger.warning("LangGraph 引擎初始化失败，问答功能不可用")
         deps.init_image_generator()
         deps.init_mastery_tracker()
+        deps.init_auth_service()
         deps.init_quiz_service()
         deps.init_question_generator()
         deps.init_exam_service()
@@ -131,9 +132,10 @@ async def health_check():
 
 # ==================== 路由注册 ====================
 
-from web.routers import dashboard, exam, graph, mastery, pages, query, quiz, trial
+from web.routers import auth, dashboard, exam, graph, mastery, pages, query, quiz, trial
 
 app.include_router(pages.router)
+app.include_router(auth.router)
 app.include_router(query.router)
 app.include_router(graph.router)
 app.include_router(mastery.router)
