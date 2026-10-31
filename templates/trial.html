@@ -18,6 +18,7 @@
                     <span class="current-label">前测-后测试用评估</span>
                 </div>
                 <div class="topbar-right">
+                    <span id="authSlot"></span>
                     <a href="/quiz" class="topbar-btn">
                         <i class="fas fa-pen-to-square"></i>
                         <span>刷题</span>
@@ -265,5 +266,6 @@
     <div class="quiz-toast" id="toast"></div>
 
     <script src="{{ url_for('static', path='js/trial-app.js') }}"></script>
+    <script src="{{ url_for('static', path='js/auth-bar.js') }}" defer></script>
 </body>
 </html>

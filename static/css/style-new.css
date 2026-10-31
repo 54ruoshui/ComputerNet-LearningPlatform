@@ -1433,3 +1433,118 @@ body {
 }
 
 .entity-tag i { font-size: 10px; }
+
+/* ==================== 全站登录状态（auth-bar.js） ==================== */
+
+.auth-entry { text-decoration: none; }
+
+.auth-user { position: relative; display: inline-flex; }
+
+.auth-user-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-2);
+    border-radius: 18px;
+    background: var(--bg-2);
+    color: var(--text-1);
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    max-width: 160px;
+    transition: border-color var(--duration) var(--ease);
+}
+
+.auth-user-btn:hover { border-color: var(--accent); }
+.auth-user-btn i { color: var(--accent); font-size: 13px; }
+.auth-user-btn span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.auth-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 280px;
+    background: var(--bg-1);
+    border: 1px solid var(--border-2);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    padding: 8px;
+    z-index: 1200;
+}
+
+.auth-user.open .auth-menu { display: block; }
+
+.auth-menu-header { padding: 8px 10px 10px; border-bottom: 1px solid var(--border-1); }
+.auth-menu-email {
+    font-size: 12px;
+    color: var(--text-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.auth-menu-title {
+    padding: 10px 10px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-4);
+}
+
+.auth-session-list { max-height: 220px; overflow-y: auto; }
+
+.auth-session-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 10px;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    cursor: pointer;
+    font-family: var(--font-body);
+    transition: background var(--duration) var(--ease);
+}
+
+.auth-session-item:hover { background: var(--bg-2); }
+
+.auth-session-item.current {
+    background: var(--accent-soft);
+    cursor: default;
+}
+
+.auth-session-title {
+    font-size: 12.5px;
+    color: var(--text-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.auth-session-meta { font-size: 11px; color: var(--text-4); margin-top: 2px; }
+.auth-session-loading { padding: 10px; font-size: 12px; color: var(--text-4); }
+
+.auth-menu-divider { height: 1px; background: var(--border-1); margin: 8px 0; }
+
+.auth-logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: var(--red);
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.auth-logout-btn:hover { background: rgba(239, 68, 68, 0.08); }

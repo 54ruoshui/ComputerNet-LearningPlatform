@@ -104,6 +104,7 @@
                     <span class="topbar-title">GraphRAG</span>
                 </div>
                 <div class="topbar-right">
+                    <span id="authSlot"></span>
                     <a href="/quiz" class="topbar-btn" title="刷题测验">
                         <i class="fas fa-pen-to-square"></i>
                         <span>刷题</span>
@@ -264,6 +265,7 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="{{ url_for('static', path='js/neo4j-graph.js') }}"></script>
     <script src="{{ url_for('static', path='js/integrated-app.js') }}"></script>
+    <script src="{{ url_for('static', path='js/auth-bar.js') }}" defer></script>
 
     <script>
         async function checkSystemStatus() {

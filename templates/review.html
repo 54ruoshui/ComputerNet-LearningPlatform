@@ -18,6 +18,7 @@
                 <span class="topbar-title">GraphRAG 复习调度</span>
             </div>
             <div class="topbar-right">
+                <span id="authSlot"></span>
                 <a href="/quiz" class="topbar-btn">
                     <i class="fas fa-pen-to-square"></i>
                     <span>刷题</span>
@@ -177,5 +178,6 @@
     <div class="quiz-toast" id="toast"></div>
 
     <script src="{{ url_for('static', path='js/review-app.js') }}"></script>
+    <script src="{{ url_for('static', path='js/auth-bar.js') }}" defer></script>
 </body>
 </html>
