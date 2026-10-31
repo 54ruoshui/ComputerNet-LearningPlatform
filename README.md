@@ -214,10 +214,21 @@ aigc/
 |------|------|------|
 | `/api/query` | POST | 主查询（`{question, session_id?}`）|
 | `/api/query/stream` | POST | SSE 流式查询 |
-| `/api/sessions` | GET | 列出会话 |
-| `/api/sessions/new` | POST | 创建会话 |
+| `/api/sessions` | GET | 列出会话（访客 ∪ 已登录账号归属，条目含 `user_owned` 标注）|
+| `/api/sessions/new` | POST | 创建会话（已登录则同时记入账号）|
 | `/api/sessions/{id}/history` | GET | 会话聊天历史 |
 | `/api/sessions/{id}` | DELETE | 删除会话 |
+
+### 账号（可选登录，游客照常使用）
+
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/login` | GET | 登录/注册页面 |
+| `/api/auth/register` | POST | 注册（`{email, password, nickname, session_id?}`，注册即登录）|
+| `/api/auth/login` | POST | 登录（响应 `session_id` 为账号接续会话，跨设备自动恢复数据）|
+| `/api/auth/logout` | POST | 登出（幂等；保留本浏览器会话数据）|
+| `/api/auth/me` | GET | 当前用户（游客返回 `user: null`）|
+| `/api/auth/sessions/claim` | POST | 切换到本账号历史会话（`{session_id}`）|
 
 ### 刷题测验
 
@@ -286,6 +297,9 @@ aigc/
 | `QWEN_CHAT_MODEL` | 关键词提取模型 | 否 | qwen-turbo |
 | `DASHSCOPE_BASE_URL` | DashScope 兼容端点 | 否 | dashscope.aliyuncs.com/compatible-mode/v1 |
 | `API_KEY` | 认证密钥（不设则跳过）| 否 | - |
+| `AUTH_TOKEN_DAYS` | 登录态有效期（天）| 否 | 30 |
+| `AUTH_MAX_LOGIN_FAILURES` | 触发锁定的连续登录失败次数 | 否 | 5 |
+| `AUTH_LOCKOUT_MINUTES` | 登录锁定时长（分钟）| 否 | 10 |
 | `MEMORY_BACKEND` | 会话存储后端 | 否 | sqlite |
 | `SQLITE_DB_PATH` | SQLite 数据库路径 | 否 | graphrag_checkpoints.db |
 | `WEB_HOST` | 服务器地址 | 否 | 0.0.0.0 |
@@ -304,13 +318,14 @@ aigc/
 | `/api/query` + `/api/query/stream` | 60 秒 | 10 次 |
 | `/api/quiz/answer` | 10 秒 | 5 次 |
 | `/api/generate_image` | 60 秒 | 5 次 |
+| `/api/auth/login`、`/api/auth/register` | 60 秒 | 60 次/IP |
 | 其他 API | 30 秒 | 30 次 |
 
-超限返回 429 状态码。
+超限返回 429 状态码。连续登录失败达 `AUTH_MAX_LOGIN_FAILURES` 次将按账号锁定 `AUTH_LOCKOUT_MINUTES` 分钟（429 + `Retry-After`）。
 
 ### API 认证
 
-设置 `API_KEY` 后，请求头需携带 `X-API-Key: your-secret-key`。白名单路径无需认证：`/`、`/quiz`、`/docs`、`/api/health`、`/static/*`。
+设置 `API_KEY` 后，请求头需携带 `X-API-Key: your-secret-key`。白名单路径无需认证：`/`、`/quiz`、`/login`、`/docs`、`/api/health`、`/api/auth/*`、`/static/*`。
 
 ## 使用说明
 
