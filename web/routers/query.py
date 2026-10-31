@@ -177,8 +177,12 @@ def list_sessions(request: Request, engine=Depends(get_langgraph_engine)):
         sessions = engine.list_sessions()
         tracker = deps._get_tracker()
         visitor = _visitor(request)
+        user = deps.resolve_user(request)
+        user_set = set()
+        if user and deps.auth_service:
+            user_set = {s["session_id"] for s in deps.auth_service.list_user_sessions(user["id"])}
         if tracker and visitor:
-            owned = set(tracker.list_sessions_for_visitor(visitor))
+            owned = set(tracker.list_sessions_for_visitor(visitor)) | user_set
             sessions = [s for s in sessions if s in owned]
         summaries = []
         for sid in sessions:
@@ -190,6 +194,7 @@ def list_sessions(request: Request, engine=Depends(get_langgraph_engine)):
                         (m["content"] for m in reversed(history) if m["role"] == "user"), ""
                     ),
                     "message_count": len(history),
+                    "user_owned": sid in user_set,
                 })
         return {"sessions": summaries}
     except Exception as e:
@@ -201,6 +206,13 @@ def list_sessions(request: Request, engine=Depends(get_langgraph_engine)):
 def new_session(request: Request, engine=Depends(get_langgraph_engine)):
     session_id = engine.new_session()
     _bind_session(session_id, request)
+    # 已登录用户的新会话同时记入账号（best-effort，游客路径不受影响）
+    user = deps.resolve_user(request)
+    if user and deps.auth_service:
+        try:
+            deps.auth_service.attach_session(user["id"], session_id)
+        except Exception as e:
+            logger.warning("会话记入账号失败", session_id=session_id, error=str(e))
     return {"session_id": session_id}
 
 
@@ -222,6 +234,11 @@ def delete_session(session_id: str, request: Request, engine=Depends(get_langgra
         if tracker:
             try:
                 tracker.unbind_session(session_id)
+            except Exception:
+                pass
+        if deps.auth_service:
+            try:
+                deps.auth_service.detach_session(session_id)
             except Exception:
                 pass
         return {"success": True}

@@ -25,6 +25,10 @@ class LoginRequest(BaseModel):
     session_id: Optional[str] = Field(default=None, max_length=64)
 
 
+class SessionClaimRequest(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=64)
+
+
 class ExportRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=500, description="导出查询")
 

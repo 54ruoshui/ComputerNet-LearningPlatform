@@ -153,3 +153,103 @@ class TestMe:
         resp = client.get("/api/auth/me")
         assert resp.status_code == 200
         assert resp.json()["user"] is None
+
+
+class TestSessionRecovery:
+    """跨设备找回：登录返回最新会话并 claim 到当前访客；会话列表合并账号归属"""
+
+    def _register_with_session(self, client, session_id):
+        resp = client.post("/api/auth/register", json={
+            "email": "alice@qq.com", "password": "password123",
+            "nickname": "小明", "session_id": session_id,
+        })
+        assert resp.status_code == 201
+        return resp.json()
+
+    def test_register_binds_current_session(self, client_with_auth):
+        client, tracker, auth = client_with_auth
+        body = self._register_with_session(client, "sess-browser-1")
+        assert body["session_id"] == "sess-browser-1"
+        assert [s["session_id"] for s in auth.list_user_sessions(1)] == ["sess-browser-1"]
+
+    def test_login_on_new_device_returns_latest_session(self, client_with_auth, mock_engine):
+        client, tracker, auth = client_with_auth
+        self._register_with_session(client, "sess-old")
+        client.post("/api/auth/logout")
+
+        # 模拟旧设备继续学习产生新会话（attach 更新 last_active_at）
+        auth.attach_session(1, "sess-new")
+
+        # 新浏览器：TestClient 自动带新 aigc_visitor cookie（首次请求种下）
+        visitor = client.cookies.get("aigc_visitor")
+        resp = client.post("/api/auth/login", json={
+            "email": "alice@qq.com", "password": "password123", "session_id": None,
+        })
+        assert resp.json()["session_id"] == "sess-new"
+        # 会话改绑到当前浏览器访客 → 聊天历史/做题数据在新设备可见
+        assert tracker.get_session_owner("sess-new") == visitor
+
+    def test_sessions_list_merges_user_and_visitor(self, client_with_auth, mock_engine):
+        client, tracker, auth = client_with_auth
+        mock_engine.list_sessions.return_value = ["sess-mine", "sess-other-visitor", "sess-account-old"]
+        mock_engine.get_session_history.return_value = [
+            {"role": "user", "content": "什么是TCP?"},
+            {"role": "assistant", "content": "…"},
+        ]
+        # 本访客拥有 sess-mine；账号另有 sess-account-old（在别的访客名下）
+        client.get("/api/auth/me")  # 先发一次请求种下访客 cookie
+        visitor = client.cookies.get("aigc_visitor")
+        assert visitor
+        tracker.bind_session("sess-mine", visitor)
+        tracker.bind_session("sess-other-visitor", visitor)
+        tracker.bind_session("sess-account-old", "other-visitor")
+
+        self._register_with_session(client, "sess-mine")
+        auth.attach_session(1, "sess-account-old")
+
+        sessions = client.get("/api/sessions").json()["sessions"]
+        ids = {s["session_id"]: s for s in sessions}
+        assert set(ids) == {"sess-mine", "sess-other-visitor", "sess-account-old"}
+        assert ids["sess-mine"]["user_owned"] is True
+        assert ids["sess-account-old"]["user_owned"] is True
+        assert ids["sess-other-visitor"]["user_owned"] is False
+
+    def test_new_session_attaches_to_logged_in_user(self, client_with_auth, mock_engine):
+        client, tracker, auth = client_with_auth
+        self._register_with_session(client, "sess-initial")
+        mock_engine.new_session.return_value = "sess-fresh"
+        resp = client.post("/api/sessions/new")
+        assert resp.json()["session_id"] == "sess-fresh"
+        assert "sess-fresh" in [s["session_id"] for s in auth.list_user_sessions(1)]
+
+    def test_claim_endpoint_switches_session(self, client_with_auth, mock_engine):
+        client, tracker, auth = client_with_auth
+        self._register_with_session(client, "sess-current")
+        auth.attach_session(1, "sess-history")
+        tracker.bind_session("sess-history", "old-device-visitor")
+
+        resp = client.post("/api/auth/sessions/claim", json={"session_id": "sess-history"})
+        assert resp.status_code == 200
+        visitor = client.cookies.get("aigc_visitor")
+        assert tracker.get_session_owner("sess-history") == visitor
+
+    def test_claim_rejects_foreign_session(self, client_with_auth):
+        client, tracker, auth = client_with_auth
+        self._register_with_session(client, "sess-mine")
+        auth.register("other@x.com", "password123", "他人")
+        auth.attach_session(2, "sess-theirs")
+        resp = client.post("/api/auth/sessions/claim", json={"session_id": "sess-theirs"})
+        assert resp.status_code == 404
+
+    def test_claim_requires_login(self, client_with_auth):
+        client, _, _ = client_with_auth
+        resp = client.post("/api/auth/sessions/claim", json={"session_id": "any"})
+        assert resp.status_code == 401
+
+    def test_delete_session_detaches_from_account(self, client_with_auth, mock_engine):
+        client, tracker, auth = client_with_auth
+        self._register_with_session(client, "sess-doomed")
+        mock_engine.list_sessions.return_value = ["sess-doomed"]
+        resp = client.delete("/api/sessions/sess-doomed")
+        assert resp.json()["success"] is True
+        assert auth.list_user_sessions(1) == []

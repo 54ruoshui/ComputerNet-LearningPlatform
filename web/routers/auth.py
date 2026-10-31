@@ -10,7 +10,7 @@ from src.services.auth_service import (
 )
 from web import deps
 from web.deps import get_auth_service
-from web.schemas import LoginRequest, RegisterRequest
+from web.schemas import LoginRequest, RegisterRequest, SessionClaimRequest
 
 logger = structlog.get_logger(__name__)
 
@@ -104,3 +104,20 @@ def me(request: Request):
     # 游客也是正常态（可选登录）：返回 200 + user=null，供前端 auth-bar 单形态判断
     user = deps.resolve_user(request)
     return {"user": user}
+
+
+@router.post("/sessions/claim")
+def claim_session(req: SessionClaimRequest, request: Request, service=Depends(get_auth_service)):
+    """切换到本账号名下的某个会话：改绑到当前访客后由前端写 localStorage 并刷新"""
+    user = deps.resolve_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="请先登录")
+    try:
+        if not service.claim_user_session(user["id"], req.session_id, _visitor(request)):
+            raise HTTPException(status_code=404, detail="会话不存在")
+        return {"session_id": req.session_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("会话切换失败", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
