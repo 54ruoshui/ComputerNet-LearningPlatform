@@ -162,6 +162,23 @@ class TestSessionManagement:
         sessions = agent_with_mocks.list_sessions()
         assert "existing-session" in sessions
 
+    def test_list_sessions_sqlite_dedupes_threads(self, agent_with_mocks):
+        from types import SimpleNamespace
+
+        def tuple_(tid):
+            return SimpleNamespace(config={"configurable": {"thread_id": tid}})
+
+        agent_with_mocks._db_conn = object()
+        agent_with_mocks.checkpointer.list = MagicMock(
+            return_value=iter([
+                tuple_("thread-b"),
+                tuple_("thread-b"),
+                tuple_("thread-a"),
+                SimpleNamespace(config={"configurable": {}}),
+            ])
+        )
+        assert agent_with_mocks.list_sessions() == ["thread-b", "thread-a"]
+
     def test_new_session(self, agent_with_mocks):
         sid = agent_with_mocks.new_session()
         assert sid in agent_with_mocks._sessions

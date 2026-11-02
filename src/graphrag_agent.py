@@ -478,10 +478,17 @@ class GraphRAGAgent:
     def list_sessions(self) -> list[str]:
         if self._db_conn:
             try:
-                configs = self.checkpointer.list({})
-                return [c["configurable"]["thread_id"] for c in configs if c.get("configurable", {}).get("thread_id")]
-            except Exception:
-                pass
+                # langgraph>=1.0 list() 产出 CheckpointTuple（每个 checkpoint 一条，需按 thread 去重）
+                sessions: list[str] = []
+                seen: set[str] = set()
+                for ckpt in self.checkpointer.list(None):
+                    tid = ckpt.config.get("configurable", {}).get("thread_id")
+                    if tid and tid not in seen:
+                        seen.add(tid)
+                        sessions.append(tid)
+                return sessions
+            except Exception as e:
+                logger.warning("从 checkpointer 列出会话失败，回退内存集合", error=str(e))
         return list(self._sessions)
 
     def new_session(self) -> str:
