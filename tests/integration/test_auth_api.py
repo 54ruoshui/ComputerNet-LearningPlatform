@@ -253,3 +253,145 @@ class TestSessionRecovery:
         resp = client.delete("/api/sessions/sess-doomed")
         assert resp.json()["success"] is True
         assert auth.list_user_sessions(1) == []
+
+
+@pytest.fixture
+def client_with_roles(mock_engine, tmp_path):
+    """带教师/管理员邀请码 + ADMIN_TOKEN 的环境：yield (client, tracker, auth)。"""
+    import web.graph_rag_web as web_mod
+
+    tracker = MasteryTracker(db_path=str(tmp_path / "mastery.db"))
+    auth = AuthService(
+        db_path=str(tmp_path / "mastery.db"), tracker=tracker,
+        teacher_code="T-INVITE", admin_code="A-INVITE",
+    )
+    orig = {
+        "engine": web_mod.deps.langgraph_engine,
+        "mastery_service": web_mod.deps.mastery_service,
+        "auth_service": web_mod.deps.auth_service,
+        "trial_service": web_mod.deps.trial_service,
+    }
+    web_mod.deps.langgraph_engine = mock_engine
+    web_mod.deps.mastery_service = MasteryService(tracker)
+    web_mod.deps.auth_service = auth
+    web_mod.deps.trial_service = MagicMock()
+
+    with patch("web.middleware.get_settings") as mock_mw, \
+         patch("web.deps.get_settings") as mock_deps:
+        mock_mw.return_value = MagicMock(api_key="")
+        mock_deps.return_value = MagicMock(admin_token="tok-123")
+        c = TestClient(web_mod.app)
+        yield c, tracker, auth, mock_deps
+
+    web_mod.deps.langgraph_engine = orig["engine"]
+    web_mod.deps.mastery_service = orig["mastery_service"]
+    web_mod.deps.auth_service = orig["auth_service"]
+    web_mod.deps.trial_service = orig["trial_service"]
+    auth.close()
+    tracker.close()
+
+
+class TestRoleRegistration:
+    def test_student_register_no_code_needed(self, client_with_roles):
+        client, _, _, _ = client_with_roles
+        resp = client.post("/api/auth/register", json={
+            "email": "stu@x.com", "password": "password123", "nickname": "同学",
+        })
+        assert resp.status_code == 201
+        assert resp.json()["user"]["role"] == "student"
+
+    def test_teacher_requires_invite_code(self, client_with_roles):
+        client, _, _, _ = client_with_roles
+        for code in ["", "wrong"]:
+            resp = client.post("/api/auth/register", json={
+                "email": "t@x.com", "password": "password123", "nickname": "老师",
+                "role": "teacher", "invite_code": code,
+            })
+            assert resp.status_code == 403
+
+    def test_teacher_valid_code_registers_and_me_returns_role(self, client_with_roles):
+        client, _, _, _ = client_with_roles
+        resp = client.post("/api/auth/register", json={
+            "email": "t@x.com", "password": "password123", "nickname": "老师",
+            "role": "teacher", "invite_code": "T-INVITE",
+        })
+        assert resp.status_code == 201
+        assert resp.json()["user"]["role"] == "teacher"
+        me = client.get("/api/auth/me").json()
+        assert me["user"]["role"] == "teacher"
+
+    def test_admin_valid_code_registers(self, client_with_roles):
+        client, _, _, _ = client_with_roles
+        resp = client.post("/api/auth/register", json={
+            "email": "adm@x.com", "password": "password123", "nickname": "管理员",
+            "role": "admin", "invite_code": "A-INVITE",
+        })
+        assert resp.status_code == 201
+        assert resp.json()["user"]["role"] == "admin"
+
+    def test_invalid_role_422(self, client_with_roles):
+        client, _, _, _ = client_with_roles
+        resp = client.post("/api/auth/register", json={
+            "email": "x@x.com", "password": "password123", "nickname": "坏",
+            "role": "principal",
+        })
+        assert resp.status_code == 422
+
+
+class TestRequireAdminDualChannel:
+    """require_admin：admin 角色登录 OR X-Admin-Token 双通道。"""
+
+    def _login(self, client, email):
+        client.cookies.delete("aigc_user")
+        resp = client.post("/api/auth/login", json={"email": email, "password": "password123"})
+        assert resp.status_code == 200
+
+    def _register_all(self, client):
+        client.post("/api/auth/register", json={"email": "stu2@x.com", "password": "password123", "nickname": "学生"})
+        client.post("/api/auth/register", json={"email": "tea2@x.com", "password": "password123", "nickname": "教师", "role": "teacher", "invite_code": "T-INVITE"})
+        client.post("/api/auth/register", json={"email": "adm2@x.com", "password": "password123", "nickname": "管理", "role": "admin", "invite_code": "A-INVITE"})
+        client.cookies.delete("aigc_user")
+
+    def test_admin_role_passes_without_token(self, client_with_roles):
+        client, _, _, _ = client_with_roles
+        self._register_all(client)
+        self._login(client, "adm2@x.com")
+        assert client.get("/api/trial/list").status_code == 200
+
+    def test_teacher_and_student_get_403(self, client_with_roles):
+        client, _, _, _ = client_with_roles
+        self._register_all(client)
+        self._login(client, "tea2@x.com")
+        assert client.get("/api/trial/list").status_code == 403
+        self._login(client, "stu2@x.com")
+        assert client.get("/api/trial/list").status_code == 403
+
+    def test_guest_with_valid_token_passes(self, client_with_roles):
+        client, _, _, _ = client_with_roles
+        client.cookies.delete("aigc_user")
+        resp = client.get("/api/trial/list", headers={"X-Admin-Token": "tok-123"})
+        assert resp.status_code == 200
+
+    def test_guest_without_credentials_401(self, client_with_roles):
+        client, _, _, _ = client_with_roles
+        resp = client.get("/api/trial/list")
+        assert resp.status_code == 401
+        resp = client.get("/api/trial/list", headers={"X-Admin-Token": "bad"})
+        assert resp.status_code == 401
+
+    def test_logged_in_student_with_valid_token_still_passes(self, client_with_roles):
+        client, _, _, _ = client_with_roles
+        self._register_all(client)
+        self._login(client, "stu2@x.com")
+        resp = client.get("/api/trial/list", headers={"X-Admin-Token": "tok-123"})
+        assert resp.status_code == 200
+
+    def test_admin_token_unconfigured_admin_role_still_works(self, client_with_roles):
+        client, _, _, mock_deps = client_with_roles
+        mock_deps.return_value = MagicMock(admin_token="")  # fail-closed token 通道
+        client, _, _, _ = client_with_roles
+        self._register_all(client)
+        self._login(client, "adm2@x.com")
+        assert client.get("/api/trial/list").status_code == 200  # 角色通道不受影响
+        client.cookies.delete("aigc_user")
+        assert client.get("/api/trial/list", headers={"X-Admin-Token": "any"}).status_code == 401

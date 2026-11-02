@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from src.services.auth_service import (
     AccountLockedError,
     EmailExistsError,
+    InviteCodeError,
     InvalidCredentialsError,
 )
 from web import deps
@@ -42,7 +43,9 @@ def _visitor(request: Request) -> str | None:
 @router.post("/register", status_code=201)
 def register(req: RegisterRequest, request: Request, response: Response, service=Depends(get_auth_service)):
     try:
-        user = service.register(req.email, req.password, req.nickname)
+        user = service.register(
+            req.email, req.password, req.nickname, role=req.role, invite_code=req.invite_code
+        )
         # 注册即登录（发 token + 接续当前会话），减少教室使用摩擦
         token = service.issue_token(user["id"])
         session_id = req.session_id
@@ -52,6 +55,8 @@ def register(req: RegisterRequest, request: Request, response: Response, service
             service.claim_user_session(user["id"], session_id, _visitor(request))
         _set_user_cookie(response, token)
         return {"user": user, "session_id": session_id}
+    except InviteCodeError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except EmailExistsError:
         raise HTTPException(status_code=409, detail="该邮箱已注册，请直接登录")
     except HTTPException:

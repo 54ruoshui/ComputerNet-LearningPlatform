@@ -9,7 +9,7 @@ import secrets
 import threading
 
 import structlog
-from fastapi import Header, HTTPException
+from fastapi import Header, HTTPException, Request
 
 from src.exceptions import GraphRAGError
 from src.settings import get_settings
@@ -182,6 +182,8 @@ def init_auth_service():
             token_days=s.auth_token_days,
             max_failures=s.auth_max_login_failures,
             lockout_minutes=s.auth_lockout_minutes,
+            teacher_code=s.teacher_code,
+            admin_code=s.admin_code,
         )
         logger.info("AuthService 初始化完成")
     except Exception as e:
@@ -191,11 +193,31 @@ def init_auth_service():
 
 # ==================== FastAPI 依赖（懒初始化语义与拆分前各路由一致） ====================
 
-def require_admin(x_admin_token: str = Header(default="")):
-    """管理端点口令校验（X-Admin-Token）。未配置 ADMIN_TOKEN 时一律拒绝（fail-closed）。"""
+def require_admin(request: Request, x_admin_token: str = Header(default="")):
+    """管理端点双通道校验：admin 角色登录 OR X-Admin-Token（研究者脚本/页面 token 流兼容）。
+
+    登录但非 admin → 403；未登录且无有效 token → 401；未配置 ADMIN_TOKEN 时 token 通道
+    fail-closed（admin 角色登录通道不受影响）。
+    """
+    user = resolve_user(request)
+    if user is not None and user.get("role") == "admin":
+        return user
     token = get_settings().admin_token
-    if not token or not secrets.compare_digest(x_admin_token, token):
-        raise HTTPException(status_code=401, detail="需要管理口令，请在请求头中设置 X-Admin-Token")
+    if token and secrets.compare_digest(x_admin_token, token):
+        return {"role": "admin", "nickname": "研究者"}
+    if user is not None:
+        raise HTTPException(status_code=403, detail="该操作需要管理员权限")
+    raise HTTPException(status_code=401, detail="需要管理口令，请在请求头中设置 X-Admin-Token")
+
+
+def require_teacher(request: Request):
+    """教师端点校验：teacher 或 admin 角色。未登录 401、学生 403。"""
+    user = resolve_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="请先登录")
+    if user.get("role") not in ("teacher", "admin"):
+        raise HTTPException(status_code=403, detail="该操作需要教师或管理员权限")
+    return user
 
 
 def get_langgraph_engine():

@@ -1,6 +1,6 @@
 """Pydantic 请求模型（带校验）"""
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -15,6 +15,9 @@ class RegisterRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     password: str = Field(..., min_length=8, max_length=128)
     nickname: str = Field(..., min_length=1, max_length=20)
+    role: Literal["student", "teacher", "admin"] = "student"
+    # 教师/管理员注册邀请码（student 忽略）
+    invite_code: str = Field(default="", max_length=64)
     session_id: Optional[str] = Field(default=None, max_length=64)
 
 
