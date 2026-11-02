@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     auth_token_days: int = Field(default=30, ge=1, le=90)
     auth_max_login_failures: int = Field(default=5, ge=1, le=20)
     auth_lockout_minutes: int = Field(default=10, ge=1, le=1440)
+    # 教师/管理员注册邀请码（空 = 该角色不开放注册；建议 ≥16 随机字符）
+    teacher_code: str = ""
+    admin_code: str = ""
 
     # Logging
     log_level: str = "INFO"

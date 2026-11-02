@@ -106,6 +106,14 @@ class AccountLockedError(AuthError):
         self.retry_seconds = retry_seconds
 
 
+class InviteCodeError(AuthError):
+    """教师/管理员注册邀请码无效（「未配置」与「不匹配」统一文案，防探测）"""
+
+
+VALID_ROLES = {"student", "teacher", "admin"}
+_ROLE_INVITE_MSG = "邀请码无效或该角色未开放注册"
+
+
 class AuthService:
     def __init__(
         self,
@@ -114,12 +122,16 @@ class AuthService:
         token_days: int = DEFAULT_TOKEN_DAYS,
         max_failures: int = DEFAULT_MAX_FAILURES,
         lockout_minutes: int = DEFAULT_LOCKOUT_MINUTES,
+        teacher_code: str = "",
+        admin_code: str = "",
     ):
         self.db_path = db_path
         self._tracker = tracker
         self._token_days = token_days
         self._max_failures = max_failures
         self._lockout_minutes = lockout_minutes
+        self._teacher_code = teacher_code or ""
+        self._admin_code = admin_code or ""
         self._lock = threading.Lock()
         self.conn = sqlite3.connect(db_path, check_same_thread=False, timeout=30)
         self.conn.execute("PRAGMA journal_mode=WAL")
@@ -142,11 +154,18 @@ class AuthService:
                     email            TEXT NOT NULL UNIQUE,
                     nickname         TEXT NOT NULL,
                     password_hash    TEXT NOT NULL,
+                    role             TEXT NOT NULL DEFAULT 'student',
                     failed_attempts  INTEGER NOT NULL DEFAULT 0,
                     locked_until     TEXT,
                     created_at       TEXT NOT NULL DEFAULT (datetime('now'))
                 )
             """)
+            # CREATE IF NOT EXISTS 不会给旧库加列：PRAGMA 检查 + ALTER，幂等
+            cols = {row[1] for row in self.conn.execute("PRAGMA table_info(users)").fetchall()}
+            if "role" not in cols:
+                self.conn.execute(
+                    "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'student'"
+                )
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS auth_tokens (
                     token_hash   TEXT PRIMARY KEY,
@@ -175,9 +194,22 @@ class AuthService:
 
     # ==================== 注册 / 登录 / 登出 ====================
 
-    def register(self, email: str, password: str, nickname: str) -> dict:
+    def register(
+        self,
+        email: str,
+        password: str,
+        nickname: str,
+        role: str = "student",
+        invite_code: str = "",
+    ) -> dict:
         email = email.strip().lower()
         nickname = nickname.strip()
+        if role not in VALID_ROLES:
+            raise ValueError(f"非法角色: {role}")
+        if role != "student":
+            expected = self._teacher_code if role == "teacher" else self._admin_code
+            if not expected or not hmac.compare_digest((invite_code or "").strip(), expected):
+                raise InviteCodeError(_ROLE_INVITE_MSG)
         with self._lock:
             existing = self.conn.execute(
                 "SELECT id FROM users WHERE email = ?", (email,)
@@ -185,15 +217,15 @@ class AuthService:
             if existing:
                 raise EmailExistsError("该邮箱已注册，请直接登录")
             cur = self.conn.execute(
-                "INSERT INTO users (email, nickname, password_hash) VALUES (?, ?, ?)",
-                (email, nickname, _hash_password(password)),
+                "INSERT INTO users (email, nickname, password_hash, role) VALUES (?, ?, ?, ?)",
+                (email, nickname, _hash_password(password), role),
             )
             self.conn.commit()
             user_id = cur.lastrowid
         row = self.conn.execute(
-            "SELECT id, email, nickname, created_at FROM users WHERE id = ?", (user_id,)
+            "SELECT id, email, nickname, role, created_at FROM users WHERE id = ?", (user_id,)
         ).fetchone()
-        return {"id": row[0], "email": row[1], "nickname": row[2], "created_at": row[3]}
+        return {"id": row[0], "email": row[1], "nickname": row[2], "role": row[3], "created_at": row[4]}
 
     def login(
         self,
@@ -210,13 +242,13 @@ class AuthService:
         now = _utcnow()
         with self._lock:
             row = self.conn.execute(
-                "SELECT id, email, nickname, password_hash, failed_attempts, locked_until FROM users WHERE email = ?",
+                "SELECT id, email, nickname, role, password_hash, failed_attempts, locked_until FROM users WHERE email = ?",
                 (email,),
             ).fetchone()
         if row is None:
             _verify_password(password, _DUMMY_HASH)
             raise InvalidCredentialsError("邮箱或密码错误")
-        user_id, _, nickname, password_hash, failed_attempts, locked_until = row
+        user_id, _, nickname, role, password_hash, failed_attempts, locked_until = row
 
         if locked_until and locked_until > now:
             retry = datetime.fromisoformat(locked_until) - datetime.fromisoformat(now)
@@ -258,7 +290,7 @@ class AuthService:
         if latest:
             self._claim_to_visitor(latest, visitor_id)
         return {
-            "user": {"id": user_id, "email": email, "nickname": nickname},
+            "user": {"id": user_id, "email": email, "nickname": nickname, "role": role},
             "token": token,
             "session_id": latest,
         }
@@ -281,19 +313,19 @@ class AuthService:
             token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
             with self._lock:
                 row = self.conn.execute(
-                    """SELECT u.id, u.email, u.nickname, t.expires_at
+                    """SELECT u.id, u.email, u.nickname, u.role, t.expires_at
                        FROM auth_tokens t JOIN users u ON u.id = t.user_id
                        WHERE t.token_hash = ?""",
                     (token_hash,),
                 ).fetchone()
-                if row is None or row[3] <= _utcnow():
+                if row is None or row[4] <= _utcnow():
                     return None
                 self.conn.execute(
                     "UPDATE auth_tokens SET last_used_at = ? WHERE token_hash = ?",
                     (_utcnow(), token_hash),
                 )
                 self.conn.commit()
-            return {"id": row[0], "email": row[1], "nickname": row[2]}
+            return {"id": row[0], "email": row[1], "nickname": row[2], "role": row[3]}
         except Exception as e:
             logger.warning("解析登录态失败", error=str(e))
             return None

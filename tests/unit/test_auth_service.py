@@ -207,3 +207,99 @@ class TestSessionBinding:
     def test_hash_password_static_delegates(self):
         assert AuthService.hash_password("pw") != ""
         assert AuthService.verify_password("pw", _hash_password("pw"))
+
+
+class TestRoles:
+    def _auth_with_codes(self, tmp_path, tracker, teacher_code="T-code-123", admin_code="A-code-456"):
+        svc = AuthService(
+            db_path=str(tmp_path / "mastery.db"),
+            tracker=tracker,
+            teacher_code=teacher_code,
+            admin_code=admin_code,
+        )
+        return svc
+
+    def test_default_role_is_student(self, auth):
+        user = auth.register("s@b.com", "password123", "同学")
+        assert user["role"] == "student"
+
+    def test_teacher_register_with_valid_code(self, tmp_path, tracker):
+        auth = self._auth_with_codes(tmp_path, tracker)
+        try:
+            user = auth.register("t@b.com", "password123", "老师", role="teacher", invite_code="T-code-123")
+            assert user["role"] == "teacher"
+            result = auth.login("t@b.com", "password123")
+            assert result["user"]["role"] == "teacher"
+        finally:
+            auth.close()
+
+    def test_admin_register_with_valid_code(self, tmp_path, tracker):
+        auth = self._auth_with_codes(tmp_path, tracker)
+        try:
+            user = auth.register("adm@b.com", "password123", "管理员", role="admin", invite_code="A-code-456")
+            assert user["role"] == "admin"
+        finally:
+            auth.close()
+
+    def test_wrong_code_unified_error(self, tmp_path, tracker):
+        from src.services.auth_service import InviteCodeError
+        auth = self._auth_with_codes(tmp_path, tracker)
+        try:
+            with pytest.raises(InviteCodeError) as teacher_wrong:
+                auth.register("t@b.com", "password123", "老师", role="teacher", invite_code="nope")
+            with pytest.raises(InviteCodeError) as admin_wrong:
+                auth.register("t2@b.com", "password123", "老师", role="admin", invite_code="also-nope")
+            assert str(teacher_wrong.value) == str(admin_wrong.value)  # 文案统一防探测
+        finally:
+            auth.close()
+
+    def test_role_code_unconfigured_rejects(self, tmp_path, tracker):
+        from src.services.auth_service import InviteCodeError
+        auth = AuthService(db_path=str(tmp_path / "mastery.db"), tracker=tracker)  # 未配置任何码
+        try:
+            with pytest.raises(InviteCodeError):
+                auth.register("t@b.com", "password123", "老师", role="teacher", invite_code="anything")
+        finally:
+            auth.close()
+
+    def test_invalid_role_raises_value_error(self, auth):
+        with pytest.raises(ValueError):
+            auth.register("x@b.com", "password123", "坏", role="principal")
+
+    def test_resolve_user_returns_role(self, auth):
+        auth.register("a@b.com", "password123", "小明")
+        result = auth.login("a@b.com", "password123")
+        user = auth.resolve_user(result["token"])
+        assert user["role"] == "student"
+
+    def test_role_column_migration_from_legacy_db(self, tmp_path, tracker):
+        # 模拟旧库：手工建无 role 列的 users 表并插入存量用户
+        import sqlite3
+        db_path = str(tmp_path / "mastery.db")
+        legacy = sqlite3.connect(db_path)
+        legacy.execute("""
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                nickname TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                failed_attempts INTEGER NOT NULL DEFAULT 0,
+                locked_until TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        legacy.execute(
+            "INSERT INTO users (email, nickname, password_hash) VALUES ('old@b.com', '老用户', 'x')"
+        )
+        legacy.commit()
+        legacy.close()
+        svc = AuthService(db_path=db_path, tracker=tracker)  # init 触发迁移
+        try:
+            cols = {r[1] for r in svc.conn.execute("PRAGMA table_info(users)")}
+            assert "role" in cols
+            row = svc.conn.execute("SELECT role FROM users WHERE email='old@b.com'").fetchone()
+            assert row[0] == "student"  # 存量用户默认学生
+            svc2 = AuthService(db_path=db_path, tracker=tracker)  # 幂等：二次 init 不报错
+            svc2.close()
+        finally:
+            svc.close()
