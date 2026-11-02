@@ -132,7 +132,7 @@ async def health_check():
 
 # ==================== 路由注册 ====================
 
-from web.routers import auth, dashboard, exam, graph, mastery, pages, query, quiz, trial
+from web.routers import auth, dashboard, exam, graph, mastery, pages, query, quiz, teacher, trial
 
 app.include_router(pages.router)
 app.include_router(auth.router)
@@ -143,6 +143,7 @@ app.include_router(quiz.router)
 app.include_router(exam.router)
 app.include_router(dashboard.router)
 app.include_router(trial.router)
+app.include_router(teacher.router)
 
 
 # ==================== 启动入口 ====================

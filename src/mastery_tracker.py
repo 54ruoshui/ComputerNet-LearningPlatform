@@ -1043,6 +1043,66 @@ class MasteryTracker:
             "by_day": by_day,
         }
 
+    def list_student_summaries(self, now_iso: str = None) -> List[dict]:
+        """教师端班级学情：跨会话聚合每个学生（会话）的做题/错题/掌握/复习/考试概览。
+
+        名单 = session_owners ∪ user_sessions 中有学习活动的会话（注册账号显昵称，
+        游客会话显「游客」）；last_active 取各活动表时间戳与 user_sessions.last_active_at
+        的最大值。只读操作。
+        """
+        now = now_iso or datetime.now().isoformat()
+        with self._lock:
+            rows = self.conn.execute(
+                """
+                WITH sessions AS (
+                    SELECT session_id FROM session_owners
+                    UNION
+                    SELECT session_id FROM user_sessions
+                )
+                SELECT s.session_id,
+                       COALESCE(u.nickname, '游客') AS nickname,
+                       u.role AS user_role,
+                       (SELECT COUNT(*) FROM mastery m WHERE m.student_id = s.session_id) AS mastered_total,
+                       (SELECT COUNT(*) FROM mastery m WHERE m.student_id = s.session_id AND m.mastered = 1) AS mastered_count,
+                       (SELECT COUNT(*) FROM quiz_done d WHERE d.session_id = s.session_id) AS done_count,
+                       (SELECT COUNT(*) FROM quiz_wrong w WHERE w.session_id = s.session_id) AS wrong_count,
+                       (SELECT COUNT(*) FROM review_state r WHERE r.student_id = s.session_id) AS review_total,
+                       (SELECT COUNT(*) FROM review_state r WHERE r.student_id = s.session_id AND r.next_review_at <= ?) AS due_count,
+                       (SELECT COUNT(*) FROM exam_results e WHERE e.session_id = s.session_id) AS exam_count,
+                       -- SQLite 多参 MAX 任一参数 NULL 则结果 NULL，子查询需 COALESCE 兜底
+                       MAX(COALESCE((SELECT MAX(us.last_active_at) FROM user_sessions us WHERE us.session_id = s.session_id), ''),
+                           COALESCE((SELECT MAX(d.done_at) FROM quiz_done d WHERE d.session_id = s.session_id), ''),
+                           COALESCE((SELECT MAX(w.wrong_time) FROM quiz_wrong w WHERE w.session_id = s.session_id), ''),
+                           COALESCE((SELECT MAX(e.completed_at) FROM exam_results e WHERE e.session_id = s.session_id), ''),
+                           COALESCE((SELECT MAX(v.recorded_at) FROM review_events v WHERE v.student_id = s.session_id), '')) AS last_active
+                FROM sessions s
+                LEFT JOIN user_sessions us2 ON us2.session_id = s.session_id
+                LEFT JOIN users u ON u.id = us2.user_id
+                """,
+                (now,),
+            ).fetchall()
+        summaries = []
+        for r in rows:
+            (sid, nickname, user_role, mastered_total, mastered_count, done_count,
+             wrong_count, review_total, due_count, exam_count, last_active) = r
+            if not (mastered_total or done_count or wrong_count or review_total or exam_count):
+                continue  # 无任何学习活动的会话不进班级名单
+            summaries.append({
+                "session_id": sid,
+                "nickname": nickname,
+                "user_role": user_role,
+                "mastered_count": mastered_count or 0,
+                "mastered_total": mastered_total or 0,
+                "done_count": done_count or 0,
+                "wrong_count": wrong_count or 0,
+                "review_total": review_total or 0,
+                "due_count": due_count or 0,
+                "exam_count": exam_count or 0,
+                "last_active": last_active or None,
+            })
+        summaries.sort(key=lambda s: s["last_active"] or "", reverse=True)
+        return summaries
+
     # ==================== 前测-后测试用评估 ====================
 
     def save_trial(self, trial_id: str, name: str, config: dict) -> str:

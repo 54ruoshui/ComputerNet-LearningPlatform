@@ -567,3 +567,62 @@ class TestSessionOwnership:
         assert found["id"] == p1["id"]
         assert found["code"] == "P0001"
         assert tracker.get_participant_by_session("unknown") is None
+
+
+class TestStudentSummaries:
+    """list_student_summaries：教师端跨会话聚合（users/user_sessions 表由同库 AuthService 建）"""
+
+    @pytest.fixture
+    def tracker_with_auth(self, tracker, tmp_path):
+        from src.services.auth_service import AuthService
+        auth = AuthService(db_path=str(tmp_path / "mastery.db"), tracker=tracker)
+        yield tracker, auth
+        auth.close()
+
+    def test_aggregates_registered_and_guest_sessions(self, tracker_with_auth):
+        tracker, auth = tracker_with_auth
+        # 注册学生会话
+        user = auth.register("s@x.com", "password123", "小网")
+        auth.attach_session(user["id"], "sess-reg")
+        tracker.mark_quiz_done("sess-reg", "q1")
+        tracker.mark_quiz_done("sess-reg", "q2")
+        tracker.upsert_quiz_wrong("sess-reg", {"id": "q2", "text": "题干", "time": "2026-11-01T10:00:00"})
+        tracker.set_mastery("sess-reg", "TCP", True)
+        tracker.set_mastery("sess-reg", "UDP", False)
+        tracker.record_review("sess-reg", "TCP", 4)
+        # 游客学生会话
+        tracker.bind_session("sess-guest", "v-guest")
+        tracker.mark_quiz_done("sess-guest", "q1")
+        # 空会话（无学习活动，应被过滤）
+        tracker.bind_session("sess-empty", "v-other")
+
+        summaries = tracker.list_student_summaries()
+        ids = {s["session_id"] for s in summaries}
+        assert ids == {"sess-reg", "sess-guest"}
+
+        reg = next(s for s in summaries if s["session_id"] == "sess-reg")
+        assert reg["nickname"] == "小网"
+        assert reg["user_role"] == "student"
+        assert reg["done_count"] == 2
+        assert reg["wrong_count"] == 1
+        assert reg["mastered_count"] == 1 and reg["mastered_total"] == 2
+        assert reg["review_total"] == 1
+        assert reg["due_count"] == 0  # 刚复习完，next_review_at 在未来
+        assert reg["last_active"]
+
+        guest = next(s for s in summaries if s["session_id"] == "sess-guest")
+        assert guest["nickname"] == "游客"
+        assert guest["user_role"] is None
+        assert guest["done_count"] == 1
+
+    def test_due_count_grows_with_cutoff(self, tracker_with_auth):
+        tracker, _ = tracker_with_auth
+        tracker.bind_session("s-due", "v1")
+        tracker.record_review("s-due", "TCP", 4)
+        assert tracker.list_student_summaries()[0]["due_count"] == 0
+        far = tracker.list_student_summaries(now_iso="2099-01-01T00:00:00")[0]
+        assert far["due_count"] == 1
+
+    def test_empty_db_returns_empty_list(self, tracker_with_auth):
+        tracker, _ = tracker_with_auth
+        assert tracker.list_student_summaries() == []
