@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>班级学情 - GraphRAG</title>
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style-new.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/quiz.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/teacher.css') }}">
+</head>
+<body>
+    <div class="quiz-layout">
+        <!-- 顶部栏 -->
+        <header class="quiz-topbar">
+            <div class="topbar-left">
+                <span class="topbar-title">GraphRAG 班级学情</span>
+            </div>
+            <div class="topbar-right">
+                <span id="authSlot"></span>
+                <a href="/" class="topbar-btn">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>问答</span>
+                </a>
+                <a href="/quiz" class="topbar-btn">
+                    <i class="fas fa-pen-to-square"></i>
+                    <span>刷题</span>
+                </a>
+                <a href="/dashboard" class="topbar-btn">
+                    <i class="fas fa-chart-line"></i>
+                    <span>看板</span>
+                </a>
+            </div>
+        </header>
+
+        <!-- ========== 列表视图 ========== -->
+        <div id="listView">
+            <!-- 班级汇总卡片 -->
+            <div class="dash-stats-grid" id="teacherStats">
+                <div class="review-stat-card">
+                    <div class="stat-icon" style="background:var(--accent-soft);"><i class="fas fa-users"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="statStudents">-</div>
+                        <div class="stat-label">学习中学生</div>
+                    </div>
+                </div>
+                <div class="review-stat-card">
+                    <div class="stat-icon" style="background:var(--green-soft);"><i class="fas fa-pen-to-square"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="statDone">-</div>
+                        <div class="stat-label">累计做题</div>
+                    </div>
+                </div>
+                <div class="review-stat-card">
+                    <div class="stat-icon" style="background:var(--red-soft);"><i class="fas fa-circle-exclamation"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="statWrong">-</div>
+                        <div class="stat-label">现存错题</div>
+                    </div>
+                </div>
+                <div class="review-stat-card">
+                    <div class="stat-icon" style="background:var(--amber-soft);"><i class="fas fa-clock"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="statDue">-</div>
+                        <div class="stat-label">待复习知识点</div>
+                    </div>
+                </div>
+                <div class="review-stat-card">
+                    <div class="stat-icon" style="background:var(--accent-soft);"><i class="fas fa-check-circle"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="statMastered">-</div>
+                        <div class="stat-label">已掌握知识点</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 学生列表 -->
+            <div class="review-section">
+                <div class="section-header">
+                    <h3><i class="fas fa-users"></i> 学生列表（点击行查看学情详情）</h3>
+                    <button class="btn-ghost btn-sm" onclick="loadStudents()" title="刷新">
+                        <i class="fas fa-arrows-rotate"></i> 刷新
+                    </button>
+                </div>
+                <div class="teacher-table-wrap">
+                    <table class="teacher-table">
+                        <thead>
+                            <tr>
+                                <th>学生</th>
+                                <th>做题</th>
+                                <th>错题</th>
+                                <th>掌握</th>
+                                <th>待复习</th>
+                                <th>考试</th>
+                                <th>最近活跃</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentRows">
+                            <tr><td colspan="8"><div class="quiz-empty"><p>加载中...</p></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="teacher-hint">
+                    <i class="fas fa-circle-info"></i>
+                    列表覆盖有做题 / 复习 / 掌握标记 / 考试记录的学生；注册学生显示昵称，未注册的游客会话显示「游客」。
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== 学生详情视图 ========== -->
+        <div id="detailView" style="display:none;">
+            <div class="detail-head">
+                <button class="btn-ghost" onclick="backToList()">
+                    <i class="fas fa-arrow-left"></i> 返回列表
+                </button>
+                <div class="detail-title">
+                    <span class="detail-nickname" id="detailNickname"></span>
+                    <span class="detail-session" id="detailSession"></span>
+                </div>
+            </div>
+
+            <div class="dash-stats-grid">
+                <div class="review-stat-card">
+                    <div class="stat-icon" style="background:var(--accent-soft);"><i class="fas fa-cubes"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="dTotal">-</div>
+                        <div class="stat-label">知识实体</div>
+                    </div>
+                </div>
+                <div class="review-stat-card">
+                    <div class="stat-icon" style="background:var(--green-soft);"><i class="fas fa-check-circle"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="dMastered">-</div>
+                        <div class="stat-label">已掌握</div>
+                    </div>
+                </div>
+                <div class="review-stat-card">
+                    <div class="stat-icon" style="background:var(--amber-soft);"><i class="fas fa-book-open"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="dLearning">-</div>
+                        <div class="stat-label">学习中</div>
+                    </div>
+                </div>
+                <div class="review-stat-card">
+                    <div class="stat-icon" style="background:var(--red-soft);"><i class="fas fa-clock"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="dDue">-</div>
+                        <div class="stat-label">待复习</div>
+                    </div>
+                </div>
+                <div class="review-stat-card">
+                    <div class="stat-icon" style="background:var(--accent-soft);"><i class="fas fa-bullseye"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="dAccuracy">-</div>
+                        <div class="stat-label">平均考试正确率</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="review-section">
+                <div class="section-header">
+                    <h3><i class="fas fa-table-cells"></i> 章节掌握度热力图</h3>
+                    <div class="heatmap-legend">
+                        <span>低</span>
+                        <span class="legend-swatch" style="background:rgba(52,199,123,0.15);"></span>
+                        <span class="legend-swatch" style="background:rgba(52,199,123,0.35);"></span>
+                        <span class="legend-swatch" style="background:rgba(52,199,123,0.55);"></span>
+                        <span class="legend-swatch" style="background:rgba(52,199,123,0.8);"></span>
+                        <span class="legend-swatch" style="background:var(--green);"></span>
+                        <span>高</span>
+                        <span class="legend-swatch" style="background:var(--bg-3);"></span>
+                        <span>无数据</span>
+                    </div>
+                </div>
+                <div class="heatmap-grid" id="dHeatmap">
+                    <div class="quiz-empty"><p>加载中...</p></div>
+                </div>
+            </div>
+
+            <div class="dash-grid-2">
+                <div class="review-section">
+                    <div class="section-header">
+                        <h3><i class="fas fa-layer-group"></i> 各层掌握率</h3>
+                    </div>
+                    <div class="layer-bars" id="dLayers">
+                        <div class="quiz-empty"><p>加载中...</p></div>
+                    </div>
+                </div>
+                <div class="review-section">
+                    <div class="section-header">
+                        <h3><i class="fas fa-clock-rotate-left"></i> 最近学习活动</h3>
+                    </div>
+                    <div class="timeline" id="dActivity">
+                        <div class="quiz-empty"><p>加载中...</p></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="review-section">
+                <div class="section-header">
+                    <h3><i class="fas fa-triangle-exclamation"></i> 薄弱点 Top 10</h3>
+                </div>
+                <div class="weak-table-wrap" id="dWeak">
+                    <div class="quiz-empty"><p>暂无薄弱点数据</p></div>
+                </div>
+            </div>
+
+            <div class="review-section">
+                <div class="section-header">
+                    <h3><i class="fas fa-file-lines"></i> 学习报告</h3>
+                </div>
+                <div class="report-actions">
+                    <button class="btn-submit" id="btnDetailReport" onclick="exportDetailReport()">
+                        <i class="fas fa-wand-magic-sparkles"></i> 生成学习报告（LLM）
+                    </button>
+                    <span class="report-hint">报告可复制、下载 Markdown</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 报告弹窗 -->
+    <div class="report-modal-overlay" id="reportModal" style="display:none;">
+        <div class="report-modal-card">
+            <div class="report-modal-header">
+                <h3><i class="fas fa-file-lines"></i> 学习报告</h3>
+                <button class="report-modal-close" onclick="closeReportModal()"><i class="fas fa-xmark"></i></button>
+            </div>
+            <div class="report-modal-body">
+                <pre id="reportContent"></pre>
+            </div>
+            <div class="report-modal-footer">
+                <button class="btn-secondary" onclick="copyReport()"><i class="fas fa-copy"></i> 复制</button>
+                <button class="btn-secondary" onclick="downloadReport()"><i class="fas fa-download"></i> 下载 .md</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="quiz-toast" id="toast"></div>
+
+    <script src="{{ url_for('static', path='js/teacher-app.js') }}"></script>
+    <script src="{{ url_for('static', path='js/auth-bar.js') }}" defer></script>
+</body>
+</html>

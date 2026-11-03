@@ -1,0 +1,153 @@
+/* 教师端班级学情页（列表视图 + 学生详情视图） */
+
+.teacher-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border-1);
+    border-radius: var(--radius);
+    background: var(--bg-0);
+}
+
+.teacher-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.teacher-table thead th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-4);
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border-2);
+    white-space: nowrap;
+}
+
+.teacher-table tbody td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border-1);
+    color: var(--text-2);
+    white-space: nowrap;
+}
+
+.teacher-table tbody tr:last-child td { border-bottom: none; }
+
+.teacher-table tbody tr { cursor: pointer; transition: background var(--duration) var(--ease); }
+.teacher-table tbody tr:hover { background: var(--bg-1); }
+
+.teacher-table .num {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-1);
+}
+
+.teacher-student-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.teacher-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #8aa2f8);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.teacher-avatar.guest {
+    background: var(--bg-3);
+    color: var(--text-3);
+}
+
+.teacher-nickname {
+    font-weight: 500;
+    color: var(--text-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 160px;
+}
+
+.teacher-role-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10px;
+    font-weight: 500;
+    border-radius: 8px;
+    padding: 1px 7px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.teacher-time { font-size: 12px; color: var(--text-4); }
+
+.teacher-view-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--accent);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font-body);
+    padding: 4px 8px;
+    border-radius: var(--radius-s);
+    transition: background var(--duration) var(--ease);
+}
+
+.teacher-view-btn:hover { background: var(--accent-soft); }
+
+.teacher-hint {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--text-4);
+}
+
+.teacher-hint i { font-size: 11px; }
+
+/* 详情视图头部 */
+.detail-head {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.detail-title {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+}
+
+.detail-nickname {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-1);
+}
+
+.detail-session {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-4);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
