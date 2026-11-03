@@ -45,6 +45,18 @@
                             <label for="nickname">昵称</label>
                             <input id="nickname" type="text" placeholder="页面顶部显示的名字" autocomplete="nickname" maxlength="20">
                         </div>
+                        <div class="form-group register-only" id="roleGroup" style="display:none;">
+                            <label for="roleSeg">注册身份</label>
+                            <div class="role-seg" id="roleSeg">
+                                <button type="button" class="role-seg-btn active" data-role="student" onclick="selectRole('student')">学生</button>
+                                <button type="button" class="role-seg-btn" data-role="teacher" onclick="selectRole('teacher')">教师</button>
+                                <button type="button" class="role-seg-btn" data-role="admin" onclick="selectRole('admin')">管理员</button>
+                            </div>
+                        </div>
+                        <div class="form-group register-only" id="inviteGroup" style="display:none;">
+                            <label for="inviteCode">邀请码</label>
+                            <input id="inviteCode" type="password" placeholder="向系统管理员索取" autocomplete="off" maxlength="64">
+                        </div>
                         <div class="form-group">
                             <label for="password">密码</label>
                             <input id="password" type="password" placeholder="至少 8 位" autocomplete="current-password" maxlength="128" required>

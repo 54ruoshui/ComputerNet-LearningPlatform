@@ -9,6 +9,17 @@
         return node;
     }
 
+    // 按 me.role（游客视作 student）显隐带 data-roles 的元素
+    function applyRoles(role) {
+        const r = role || 'student';
+        document.querySelectorAll('[data-roles]').forEach(node => {
+            const allowed = (node.getAttribute('data-roles') || '').split(/\s+/);
+            node.style.display = allowed.includes(r) ? '' : 'none';
+        });
+    }
+
+    const ROLE_NAMES = { teacher: '教师', admin: '管理员' };
+
     function renderGuest(slot) {
         const link = el('a', 'topbar-btn auth-entry');
         link.href = '/login?next=' + encodeURIComponent(location.pathname);
@@ -113,6 +124,11 @@
         const idBlock = el('div', 'auth-menu-id');
         const nick = el('div', 'auth-menu-nick');
         nick.textContent = user.nickname;
+        if (ROLE_NAMES[user.role]) {
+            const badge = el('span', 'auth-role-badge');
+            badge.textContent = ROLE_NAMES[user.role];
+            nick.appendChild(badge);
+        }
         const email = el('div', 'auth-menu-email');
         email.textContent = user.email;
         idBlock.appendChild(nick);
@@ -162,9 +178,16 @@
         try {
             const resp = await fetch('/api/auth/me');
             const data = await resp.json();
-            if (data.user) { renderUser(slot, data.user); } else { renderGuest(slot); }
+            if (data.user) {
+                renderUser(slot, data.user);
+                applyRoles(data.user.role);
+            } else {
+                renderGuest(slot);
+                applyRoles('student');
+            }
         } catch (e) {
             renderGuest(slot);
+            applyRoles('student');
         }
     }
 

@@ -105,15 +105,11 @@
     async function loadTrials() {
         const input = $("adminTokenInput");
         if (input) input.value = localStorage.getItem("aigc_admin_token") || "";
-        if (!localStorage.getItem("aigc_admin_token")) {
-            $("trialList").innerHTML = '<p class="trial-hint">请先在上方输入管理口令，才能查看和管理试用批次。</p>';
-            return;
-        }
         try {
             const data = await apiGet("/api/trial/list", adminHeaders());
             renderTrials(data.trials || []);
         } catch (e) {
-            $("trialList").innerHTML = '<p class="trial-hint">加载失败：' + escapeHtml(e.message) + "（口令可能不正确）</p>";
+            $("trialList").innerHTML = '<p class="trial-hint">请先在上方输入管理口令，才能查看和管理试用批次。</p>';
         }
     }
 
@@ -623,5 +619,26 @@
 
     // ==================== 初始化 ====================
 
-    loadTrials();
+    // 研究管理标签仅对管理员开放；已存 aigc_admin_token 的游客研究者（兼容现状）也可见
+    async function initTabs() {
+        let isAdmin = false;
+        if (localStorage.getItem("aigc_admin_token")) {
+            isAdmin = true;
+        } else {
+            try {
+                const resp = await fetch("/api/auth/me");
+                const data = await resp.json();
+                isAdmin = !!(data.user && data.user.role === "admin");
+            } catch (e) { /* 游客 */ }
+        }
+        if (isAdmin) {
+            $("tabAdmin").style.display = "";
+            $("adminPanel").style.display = "block";
+            loadTrials();
+        } else {
+            switchTrialTab("participant");
+        }
+    }
+
+    initTabs();
 })();

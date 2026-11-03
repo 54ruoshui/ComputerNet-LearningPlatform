@@ -105,18 +105,22 @@
                 </div>
                 <div class="topbar-right">
                     <span id="authSlot"></span>
-                    <a href="/quiz" class="topbar-btn" title="刷题测验">
+                    <a href="/quiz" class="topbar-btn" title="刷题测验" data-roles="student teacher admin">
                         <i class="fas fa-pen-to-square"></i>
                         <span>刷题</span>
                     </a>
-                    <a href="/review" class="topbar-btn" title="复习调度">
+                    <a href="/review" class="topbar-btn" title="复习调度" data-roles="student teacher admin">
                         <i class="fas fa-brain"></i>
                         <span>复习</span>
                     </a>
-                    <a href="/dashboard" class="topbar-btn" title="数据看板">
+                    <a href="/dashboard" class="topbar-btn" title="数据看板" data-roles="student teacher admin">
                         <i class="fas fa-chart-line"></i>
                         <span>看板</span>
                     </a>
+                        <a href="/teacher" class="topbar-btn" data-roles="teacher admin" style="display:none;">
+                            <i class="fas fa-users"></i>
+                            <span>班级学情</span>
+                        </a>
                     <span class="topbar-stat">
                         <i class="fas fa-circle-nodes"></i>
                         <span id="topbarNodeCount">-</span>

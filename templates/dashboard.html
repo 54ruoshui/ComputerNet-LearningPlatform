@@ -23,13 +23,17 @@
                     <i class="fas fa-arrow-left"></i>
                     <span>问答</span>
                 </a>
-                <a href="/quiz" class="topbar-btn">
+                <a href="/quiz" class="topbar-btn" data-roles="student teacher admin">
                     <i class="fas fa-pen-to-square"></i>
                     <span>刷题</span>
                 </a>
-                <a href="/review" class="topbar-btn">
+                <a href="/review" class="topbar-btn" data-roles="student teacher admin">
                     <i class="fas fa-rotate"></i>
                     <span>复习</span>
+                </a>
+                <a href="/teacher" class="topbar-btn" data-roles="teacher admin" style="display:none;">
+                    <i class="fas fa-users"></i>
+                    <span>班级学情</span>
                 </a>
             </div>
         </header>

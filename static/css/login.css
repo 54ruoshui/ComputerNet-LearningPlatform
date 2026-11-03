@@ -138,6 +138,35 @@
 
 .auth-hint i { color: var(--text-4); margin-top: 3px; }
 
+/* 注册身份三选 segmented 控件 */
+.role-seg {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+    padding: 4px;
+    background: var(--bg-2);
+    border-radius: 10px;
+}
+
+.role-seg-btn {
+    padding: 8px 0;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-3);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.role-seg-btn.active {
+    background: var(--bg-0);
+    color: var(--accent);
+    box-shadow: var(--shadow-sm);
+}
+
 @media (max-width: 480px) {
     .auth-card { margin: 20px 12px 0; padding: 28px 20px 22px; }
 }

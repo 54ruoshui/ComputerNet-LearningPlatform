@@ -1,12 +1,24 @@
 /* 登录/注册页 — 双 mode 切换、提交、登录后接续账号会话并跳回来源页 */
 
 let authMode = 'login';
+let authRole = 'student';
+
+function selectRole(role) {
+    authRole = role;
+    document.querySelectorAll('.role-seg-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.role === role);
+    });
+    document.getElementById('inviteGroup').style.display = role === 'student' ? 'none' : '';
+    hideError();
+}
 
 function switchMode(mode) {
     authMode = mode;
     document.getElementById('tabLogin').classList.toggle('active', mode === 'login');
     document.getElementById('tabRegister').classList.toggle('active', mode === 'register');
     document.getElementById('nicknameGroup').style.display = mode === 'register' ? '' : 'none';
+    document.getElementById('roleGroup').style.display = mode === 'register' ? '' : 'none';
+    document.getElementById('inviteGroup').style.display = mode === 'register' && authRole !== 'student' ? '' : 'none';
     document.getElementById('confirmGroup').style.display = mode === 'register' ? '' : 'none';
     document.getElementById('password').autocomplete = mode === 'register' ? 'new-password' : 'current-password';
     document.getElementById('authSubmitLabel').textContent = mode === 'register' ? '创建账号' : '登录';
@@ -57,6 +69,10 @@ async function submitAuth(ev) {
         if (!nickname) { showError('请填写昵称'); return; }
         if (password.length < 8) { showError('密码至少 8 位'); return; }
         if (password !== confirm) { showError('两次输入的密码不一致'); return; }
+        if (authRole !== 'student' && !document.getElementById('inviteCode').value.trim()) {
+            showError('教师/管理员注册需要邀请码');
+            return;
+        }
     }
 
     const payload = {
@@ -66,6 +82,8 @@ async function submitAuth(ev) {
     };
     if (authMode === 'register') {
         payload.nickname = document.getElementById('nickname').value.trim();
+        payload.role = authRole;
+        if (authRole !== 'student') payload.invite_code = document.getElementById('inviteCode').value.trim();
     }
 
     const btn = document.getElementById('authSubmitBtn');
