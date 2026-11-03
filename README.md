@@ -224,10 +224,10 @@ aigc/
 | 端点 | 方法 | 描述 |
 |------|------|------|
 | `/login` | GET | 登录/注册页面 |
-| `/api/auth/register` | POST | 注册（`{email, password, nickname, session_id?}`，注册即登录）|
+| `/api/auth/register` | POST | 注册（`{email, password, nickname, role?, invite_code?, session_id?}`；role 默认 `student`，教师/管理员需邀请码，注册即登录）|
 | `/api/auth/login` | POST | 登录（响应 `session_id` 为账号接续会话，跨设备自动恢复数据）|
 | `/api/auth/logout` | POST | 登出（幂等；保留本浏览器会话数据）|
-| `/api/auth/me` | GET | 当前用户（游客返回 `user: null`）|
+| `/api/auth/me` | GET | 当前用户（游客返回 `user: null`，含 `role` 字段）|
 | `/api/auth/sessions/claim` | POST | 切换到本账号历史会话（`{session_id}`）|
 
 ### 刷题测验
@@ -274,6 +274,15 @@ aigc/
 | `/api/trial/{id}/analysis` | GET | 前后测效果分析（整体/分层/行为/满意度，🔒 `X-Admin-Token`）|
 | `/api/trial/{id}/report` | POST | LLM 生成用户试用评估报告（🔒 `X-Admin-Token`）|
 
+### 班级学情（教师，只读）
+
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/teacher` | GET | 班级学情页面（非教师/管理员登录则重定向 `/login?next=/teacher`）|
+| `/api/teacher/students` | GET | 全部学生学习概览（昵称、答题/错题数、掌握度、待复习、最近活跃；游客会话显示「游客」）（🔒 教师或管理员）|
+| `/api/teacher/students/{sid}/overview` | GET | 单个学生学习看板全量数据（🔒 教师或管理员）|
+| `/api/teacher/students/{sid}/report` | POST | LLM 生成单个学生学习报告（🔒 教师或管理员）|
+
 ### 系统
 
 | 端点 | 方法 | 描述 |
@@ -300,6 +309,8 @@ aigc/
 | `AUTH_TOKEN_DAYS` | 登录态有效期（天）| 否 | 30 |
 | `AUTH_MAX_LOGIN_FAILURES` | 触发锁定的连续登录失败次数 | 否 | 5 |
 | `AUTH_LOCKOUT_MINUTES` | 登录锁定时长（分钟）| 否 | 10 |
+| `TEACHER_CODE` | 教师角色注册邀请码（不设则教师角色不可注册）| 否 | - |
+| `ADMIN_CODE` | 管理员角色注册邀请码（不设则管理员角色不可注册）| 否 | - |
 | `MEMORY_BACKEND` | 会话存储后端 | 否 | sqlite |
 | `SQLITE_DB_PATH` | SQLite 数据库路径 | 否 | graphrag_checkpoints.db |
 | `WEB_HOST` | 服务器地址 | 否 | 0.0.0.0 |
@@ -326,6 +337,20 @@ aigc/
 ### API 认证
 
 设置 `API_KEY` 后，请求头需携带 `X-API-Key: your-secret-key`。白名单路径无需认证：`/`、`/quiz`、`/login`、`/docs`、`/api/health`、`/api/auth/*`、`/static/*`。
+
+### 角色与权限
+
+账号分三种角色，注册时选定（教师/管理员需邀请码 `TEACHER_CODE` / `ADMIN_CODE`）；不登录的游客可见性与学生相同。
+
+| 能力 | 学生（含游客）| 教师 | 管理员 |
+|------|------|------|------|
+| 问答 / 刷题 / 复习 / 个人看板 | ✅ | ✅ | ✅ |
+| 班级学情 `/teacher`（全部学生概览 + 单人报告下钻）| ❌ | ✅ | ✅ |
+| 研究管理（试用批次管理 / AI 出题入库 / 试卷导入）| ❌ | ❌ | ✅ |
+
+- 标注 🔒 `X-Admin-Token` 的管理端点支持双通道：**管理员角色登录** 或请求头携带 `X-Admin-Token`（未配置 token 时 fail-closed）
+- 教师对全局数据**只读**：可查看全部有学习活动学生的概览与学习报告，不能建批次、写题库、导入试卷或修改他人数据
+- 前端按角色显隐入口（topbar「班级学情」链接、`/trial` 研究管理标签），后端守卫为最终防线
 
 ## 使用说明
 
