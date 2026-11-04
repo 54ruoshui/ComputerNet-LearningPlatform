@@ -760,6 +760,16 @@ class TestTrialEndpoints:
         assert resp.json()["session_id"] == "sess-1"  # 服务端协商出的会话
         mock_trial.join.assert_called_once_with("P0001", "sess-1")
 
+    def test_join_rate_limited(self, client_with_trial):
+        """被试码端点 60/min 防枚举：第 61 次同 IP 请求 429"""
+        client, _ = client_with_trial
+        payload = {"code": "P0001", "session_id": "sess-1"}
+        for _ in range(60):
+            assert client.post("/api/trial/join", json=payload).status_code == 200
+        resp = client.post("/api/trial/join", json=payload)
+        assert resp.status_code == 429
+        assert resp.headers["Retry-After"] == "60"
+
     def test_start_test_invalid_phase_422(self, client_with_trial):
         client, _ = client_with_trial
         resp = client.post("/api/trial/test/start", json={"code": "P0001", "phase": "mid"})

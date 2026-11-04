@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from src.mastery_tracker import MasteryTracker
-from src.services.trial_service import MCQ_LAYERS, TrialService
+from src.services.trial_service import CODE_ALPHABET, MCQ_LAYERS, TrialService
 
 
 LAYERS = MCQ_LAYERS
@@ -178,8 +178,11 @@ class TestTakingTests:
 
     def test_auto_code_generation(self, service):
         created = service.create_trial("T", per_layer=2, seed=1)
-        p = service.add_participant(created["trial_id"])
-        assert p["code"].startswith("P") and len(p["code"]) == 5
+        codes = {service.add_participant(created["trial_id"])["code"] for _ in range(5)}
+        assert len(codes) == 5  # 无碰撞
+        for code in codes:
+            assert code.startswith("P") and len(code) == 7
+            assert set(code[1:]) <= set(CODE_ALPHABET)
 
 
 class TestJoin:

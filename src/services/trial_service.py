@@ -18,6 +18,11 @@ logger = structlog.get_logger(__name__)
 # 与 quiz_service.VALID_LAYERS 一致，固定顺序保证抽卷稳定
 MCQ_LAYERS = ["物理层", "数据链路层", "网络层", "传输层", "应用层"]
 
+# 被试码字符表：去掉易混淆字符（0/O、1/I/L），6 位约 8.9 亿组合，防枚举爆破
+# （存量的 4 位纯数字旧码按字符串精确匹配，仍可正常加入）
+CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+CODE_LENGTH = 6
+
 
 class TrialService:
     def __init__(self, driver, tracker):
@@ -102,7 +107,7 @@ class TrialService:
     def _generate_code(self, trial_id: str) -> str:
         existing = {p["code"] for p in self._tracker.list_participants(trial_id)}
         while True:
-            code = f"P{random.randint(0, 9999):04d}"
+            code = "P" + "".join(random.choices(CODE_ALPHABET, k=CODE_LENGTH))
             if code not in existing:
                 return code
 
