@@ -3,7 +3,7 @@
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from src.exceptions import GraphRAGError
 from web import deps
@@ -14,6 +14,7 @@ from web.schemas import (
     QuizGenerateRequest,
     WrongEntry,
 )
+from web.session_access import require_session_owner
 
 logger = structlog.get_logger(__name__)
 
@@ -47,8 +48,9 @@ def get_chapter_structure(service=Depends(get_quiz_service)):
 
 
 @router.post("/answer")
-def submit_quiz_answer(req: QuizAnswerRequest, service=Depends(get_quiz_service)):
+def submit_quiz_answer(req: QuizAnswerRequest, request: Request, service=Depends(get_quiz_service)):
     try:
+        require_session_owner(req.session_id, request)
         result = service.check_answer(req.question_id)
         if not result:
             raise HTTPException(status_code=404, detail="题目不存在")
@@ -129,39 +131,45 @@ def _require_quiz_storage(detail: str = "存储服务未初始化"):
 
 
 @router.get("/done")
-def api_get_done_ids(session_id: str = "default"):
+def api_get_done_ids(request: Request, session_id: str = "default"):
     service = _require_quiz_storage()
+    require_session_owner(session_id, request)
     return {"ids": service.get_quiz_done_ids(session_id)}
 
 
 @router.post("/done/{question_id}")
-def api_mark_done(question_id: str, session_id: str = "default"):
+def api_mark_done(question_id: str, request: Request, session_id: str = "default"):
     service = _require_quiz_storage()
+    require_session_owner(session_id, request)
     return {"ids": service.mark_quiz_done(session_id, question_id)}
 
 
 @router.get("/wrong")
-def api_get_wrong_list(session_id: str = "default"):
+def api_get_wrong_list(request: Request, session_id: str = "default"):
     service = _require_quiz_storage()
+    require_session_owner(session_id, request)
     return {"list": service.get_quiz_wrong_list(session_id)}
 
 
 @router.post("/wrong")
-def api_add_wrong(entry: WrongEntry):
+def api_add_wrong(entry: WrongEntry, request: Request):
     service = _require_quiz_storage()
     sid = entry.session_id or "default"
+    require_session_owner(sid, request)
     payload = entry.model_dump(exclude={"session_id"})
     return {"list": service.upsert_quiz_wrong(sid, payload)}
 
 
 @router.delete("/wrong/{question_id}")
-def api_remove_wrong(question_id: str, session_id: str = "default"):
+def api_remove_wrong(question_id: str, request: Request, session_id: str = "default"):
     service = _require_quiz_storage()
+    require_session_owner(session_id, request)
     return {"list": service.remove_quiz_wrong(session_id, question_id)}
 
 
 @router.delete("/wrong")
-def api_clear_wrong(session_id: str = "default"):
+def api_clear_wrong(request: Request, session_id: str = "default"):
     service = _require_quiz_storage()
+    require_session_owner(session_id, request)
     service.clear_quiz_wrong(session_id)
     return {"success": True}

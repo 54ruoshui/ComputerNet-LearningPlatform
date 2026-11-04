@@ -3,11 +3,12 @@
 from typing import Dict
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from web.concurrency import get_gate
 from web.deps import get_exam_service, require_admin
 from web.schemas import ExamSubmitRequest
+from web.session_access import require_session_owner
 
 logger = structlog.get_logger(__name__)
 
@@ -48,8 +49,9 @@ def import_exam_paper(data: Dict, _admin: None = Depends(require_admin), service
 
 
 @router.post("/submit")
-def submit_exam(req: ExamSubmitRequest, service=Depends(get_exam_service)):
+def submit_exam(req: ExamSubmitRequest, request: Request, service=Depends(get_exam_service)):
     try:
+        require_session_owner(req.session_id, request)
         result = service.submit_exam(
             req.session_id, req.paper_id, req.answers
         )
@@ -83,39 +85,50 @@ def submit_exam(req: ExamSubmitRequest, service=Depends(get_exam_service)):
 
 
 @router.get("/analysis/{session_id}")
-def get_exam_analysis(session_id: str, service=Depends(get_exam_service)):
+def get_exam_analysis(session_id: str, request: Request, service=Depends(get_exam_service)):
     try:
+        require_session_owner(session_id, request)
         analysis = service.analyze_weaknesses(session_id)
         return analysis
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("获取分析失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/recommendations/{session_id}")
-def get_exam_recommendations(session_id: str, limit: int = 20, service=Depends(get_exam_service)):
+def get_exam_recommendations(session_id: str, request: Request, limit: int = 20, service=Depends(get_exam_service)):
     try:
+        require_session_owner(session_id, request)
         return service.get_recommendations(session_id, limit=limit)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("获取推荐失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/history/{session_id}")
-def get_exam_history(session_id: str, service=Depends(get_exam_service)):
+def get_exam_history(session_id: str, request: Request, service=Depends(get_exam_service)):
     try:
+        require_session_owner(session_id, request)
         return service.get_exam_history(session_id)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("获取考试历史失败", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/result/{result_id}")
-def get_exam_result(result_id: int, service=Depends(get_exam_service)):
+def get_exam_result(result_id: int, request: Request, service=Depends(get_exam_service)):
     try:
         result = service.get_exam_result(result_id)
         if not result:
             raise HTTPException(status_code=404, detail="考试记录不存在")
+        # result_id 可枚举，按其所属会话做归属校验
+        require_session_owner(result.get("session_id"), request)
         return result
     except HTTPException:
         raise

@@ -357,6 +357,60 @@ class TestSessionOwnership:
         resp = client.post("/api/query", json={"question": "q", "session_id": "any-session"})
         assert resp.status_code == 200
 
+    def test_user_data_routes_reject_foreign_session(self, client_with_sessions):
+        """mastery/review/quiz 用户数据路由统一拒绝他人会话（404 不暴露存在性）"""
+        client, tracker = client_with_sessions
+        tracker.bind_session("s-victim", "another-visitor")
+        assert client.get("/api/mastery/s-victim").status_code == 404
+        assert client.post("/api/mastery", json={
+            "session_id": "s-victim", "entity_name": "TCP", "mastered": True,
+        }).status_code == 404
+        assert client.get("/api/review/state/s-victim").status_code == 404
+        assert client.get("/api/review/due/s-victim").status_code == 404
+        assert client.get("/api/review/stats/s-victim").status_code == 404
+        assert client.get("/api/quiz/done", params={"session_id": "s-victim"}).status_code == 404
+        assert client.get("/api/quiz/wrong", params={"session_id": "s-victim"}).status_code == 404
+        assert client.delete("/api/quiz/wrong", params={"session_id": "s-victim"}).status_code == 404
+
+    def test_exam_and_dashboard_routes_reject_foreign_session(self, client_with_sessions):
+        """exam/dashboard（含按所属会话校验的 result）同样拒绝他人会话"""
+        import web.graph_rag_web as web_mod
+        client, tracker = client_with_sessions
+        tracker.bind_session("s-victim", "another-visitor")
+        mock_exam = MagicMock()
+        mock_exam.get_exam_history.return_value = {"history": []}
+        mock_exam.get_exam_result.return_value = {"result_id": 1, "session_id": "s-victim"}
+        mock_dash = MagicMock()
+        mock_dash.get_overview.return_value = {}
+        orig = {
+            "exam": web_mod.deps.exam_service,
+            "dash": web_mod.deps.dashboard_service,
+        }
+        web_mod.deps.exam_service = mock_exam
+        web_mod.deps.dashboard_service = mock_dash
+        try:
+            assert client.get("/api/exam/history/s-victim").status_code == 404
+            assert client.get("/api/exam/analysis/s-victim").status_code == 404
+            assert client.get("/api/exam/recommendations/s-victim").status_code == 404
+            assert client.get("/api/exam/result/1").status_code == 404
+            assert client.get("/api/dashboard/overview/s-victim").status_code == 404
+        finally:
+            web_mod.deps.exam_service = orig["exam"]
+            web_mod.deps.dashboard_service = orig["dash"]
+
+    def test_mastery_route_lazy_binds_unbound_session(self, client_with_sessions):
+        """存量未绑定会话在 mastery 路由首次访问时懒绑定到当前访客"""
+        client, tracker = client_with_sessions
+        assert client.get("/api/mastery/legacy-m").status_code == 200
+        assert tracker.get_session_owner("legacy-m") == client.cookies.get("aigc_visitor")
+
+    def test_shared_default_session_skips_ownership(self, client_with_sessions):
+        """旧版共享 "default" 会话不参与归属校验（绑定会互相顶掉且无个人数据）"""
+        client, tracker = client_with_sessions
+        assert client.get("/api/quiz/done").status_code == 200
+        assert client.get("/api/quiz/done", params={"session_id": "default"}).status_code == 200
+        assert tracker.get_session_owner("default") is None
+
 
 # ---------- Graph Stats ----------
 

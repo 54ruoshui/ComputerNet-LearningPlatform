@@ -13,6 +13,12 @@ from web import deps
 from web.concurrency import get_gate
 from web.deps import get_langgraph_engine
 from web.schemas import QueryRequest
+from web.session_access import (
+    bind_session,
+    ensure_session_owner,
+    session_accessible,
+    visitor_id,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -21,56 +27,12 @@ router = APIRouter(prefix="/api", tags=["query"])
 GATE_BUSY_MESSAGE = "当前查询人数较多，请稍后重试"
 
 
-def _visitor(request: Request) -> str | None:
-    vid = request.scope.get("aigc_visitor")
-    if vid:
-        return vid
-    return request.cookies.get("aigc_visitor")
-
-
-def _bind_session(session_id: str, request: Request):
-    """把会话绑定到当前访客（best-effort；tracker 不可用时静默跳过）"""
-    tracker = deps._get_tracker()
-    visitor = _visitor(request)
-    if tracker and visitor:
-        try:
-            tracker.bind_session(session_id, visitor)
-        except Exception as e:
-            logger.warning("会话归属绑定失败", session_id=session_id, error=str(e))
-
-
-def _ensure_session_owner(session_id: str, request: Request) -> bool:
-    """查询路径的归属校验：未绑定会话就地懒绑定（治愈存量会话），绑定他人返回 False。
-
-    tracker/访客不可用时放行（fail-open，与其余 mastery 降级行为一致）。
-    """
-    tracker = deps._get_tracker()
-    visitor = _visitor(request)
-    if not tracker or not visitor:
-        return True
-    owner = tracker.get_session_owner(session_id)
-    if owner is None:
-        _bind_session(session_id, request)
-        return True
-    return owner == visitor
-
-
-def _session_accessible(session_id: str, request: Request) -> bool:
-    """history/delete 的归属校验：未绑定或绑定他人一律视为不存在（fail-open 同上）"""
-    tracker = deps._get_tracker()
-    visitor = _visitor(request)
-    if not tracker or not visitor:
-        return True
-    owner = tracker.get_session_owner(session_id)
-    return owner is not None and owner == visitor
-
-
 @router.post("/query")
 def query(req: QueryRequest, request: Request, engine=Depends(get_langgraph_engine)):
     try:
         if req.session_id:
             session_id_var.set(req.session_id)
-            if not _ensure_session_owner(req.session_id, request):
+            if not ensure_session_owner(req.session_id, request):
                 raise HTTPException(status_code=404, detail="会话不存在")
 
         logger.info("LangGraph 查询", session_id=req.session_id, question=req.question[:100])
@@ -125,7 +87,7 @@ async def query_stream(req: QueryRequest, request: Request, engine=Depends(get_l
     """流式查询：SSE 逐 token 推送 + 工具状态 + 图谱数据"""
     if req.session_id:
         session_id_var.set(req.session_id)
-        if not _ensure_session_owner(req.session_id, request):
+        if not ensure_session_owner(req.session_id, request):
             raise HTTPException(status_code=404, detail="会话不存在")
 
     mastery_context = ""
@@ -176,7 +138,7 @@ def list_sessions(request: Request, engine=Depends(get_langgraph_engine)):
     try:
         sessions = engine.list_sessions()
         tracker = deps._get_tracker()
-        visitor = _visitor(request)
+        visitor = visitor_id(request)
         user = deps.resolve_user(request)
         user_set = set()
         if user and deps.auth_service:
@@ -205,7 +167,7 @@ def list_sessions(request: Request, engine=Depends(get_langgraph_engine)):
 @router.post("/sessions/new")
 def new_session(request: Request, engine=Depends(get_langgraph_engine)):
     session_id = engine.new_session()
-    _bind_session(session_id, request)
+    bind_session(session_id, request)
     # 已登录用户的新会话同时记入账号（best-effort，游客路径不受影响）
     user = deps.resolve_user(request)
     if user and deps.auth_service:
@@ -218,7 +180,7 @@ def new_session(request: Request, engine=Depends(get_langgraph_engine)):
 
 @router.get("/sessions/{session_id}/history")
 def session_history(session_id: str, request: Request, engine=Depends(get_langgraph_engine)):
-    if not _session_accessible(session_id, request):
+    if not session_accessible(session_id, request):
         raise HTTPException(status_code=404, detail="会话不存在")
     history = engine.get_session_history(session_id)
     return {"session_id": session_id, "history": history}
@@ -226,7 +188,7 @@ def session_history(session_id: str, request: Request, engine=Depends(get_langgr
 
 @router.delete("/sessions/{session_id}")
 def delete_session(session_id: str, request: Request, engine=Depends(get_langgraph_engine)):
-    if not _session_accessible(session_id, request):
+    if not session_accessible(session_id, request):
         raise HTTPException(status_code=404, detail="会话不存在")
     success = engine.delete_session(session_id)
     if success:

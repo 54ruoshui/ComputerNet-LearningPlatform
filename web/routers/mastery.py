@@ -3,7 +3,7 @@
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from web import deps
 from web.schemas import (
@@ -12,6 +12,7 @@ from web.schemas import (
     MasteryRequest,
     ReviewRecordRequest,
 )
+from web.session_access import require_session_owner
 
 logger = structlog.get_logger(__name__)
 
@@ -26,28 +27,32 @@ def _require_mastery(detail: str):
 
 
 @router.get("/mastery/{session_id}")
-def get_mastery(session_id: str):
+def get_mastery(session_id: str, request: Request):
     service = _require_mastery("掌握追踪器未初始化")
+    require_session_owner(session_id, request)
     return service.get_mastery(session_id)
 
 
 @router.post("/mastery")
-def set_mastery(req: MasteryRequest):
+def set_mastery(req: MasteryRequest, request: Request):
     service = _require_mastery("掌握追踪器未初始化")
+    require_session_owner(req.session_id, request)
     service.set_mastery(req.session_id, req.entity_name, req.mastered)
     return {"success": True}
 
 
 @router.post("/mastery/batch")
-def set_mastery_batch(req: MasteryBatchRequest):
+def set_mastery_batch(req: MasteryBatchRequest, request: Request):
     service = _require_mastery("掌握追踪器未初始化")
+    require_session_owner(req.session_id, request)
     service.set_mastery_batch(req.session_id, req.entities)
     return {"success": True}
 
 
 @router.get("/review/state/{session_id}")
-def get_review_state(session_id: str):
+def get_review_state(session_id: str, request: Request):
     service = _require_mastery("复习调度器未初始化")
+    require_session_owner(session_id, request)
     try:
         return service.get_review_state(session_id)
     except Exception as e:
@@ -56,8 +61,9 @@ def get_review_state(session_id: str):
 
 
 @router.get("/review/due/{session_id}")
-def get_due_reviews(session_id: str, lookahead: float = 48, limit: int = 50):
+def get_due_reviews(session_id: str, request: Request, lookahead: float = 48, limit: int = 50):
     service = _require_mastery("复习调度器未初始化")
+    require_session_owner(session_id, request)
     try:
         return service.get_due_reviews(session_id, lookahead, limit)
     except Exception as e:
@@ -66,8 +72,9 @@ def get_due_reviews(session_id: str, lookahead: float = 48, limit: int = 50):
 
 
 @router.post("/review/record")
-def record_review(req: ReviewRecordRequest):
+def record_review(req: ReviewRecordRequest, request: Request):
     service = _require_mastery("复习调度器未初始化")
+    require_session_owner(req.session_id, request)
     try:
         result = service.record_review(
             req.session_id, req.entity_name, req.quality, req.event_type
@@ -79,8 +86,9 @@ def record_review(req: ReviewRecordRequest):
 
 
 @router.get("/review/stats/{session_id}")
-def get_review_stats(session_id: str):
+def get_review_stats(session_id: str, request: Request):
     service = _require_mastery("复习调度器未初始化")
+    require_session_owner(session_id, request)
     try:
         return service.get_review_stats(session_id)
     except Exception as e:
@@ -89,8 +97,9 @@ def get_review_stats(session_id: str):
 
 
 @router.post("/feedback")
-def submit_feedback(req: FeedbackRequest):
+def submit_feedback(req: FeedbackRequest, request: Request):
     service = _require_mastery("反馈服务未初始化")
+    require_session_owner(req.session_id, request)
     try:
         row_id = service.record_feedback(
             req.session_id or "", req.rating, req.question, req.comment
@@ -102,8 +111,9 @@ def submit_feedback(req: FeedbackRequest):
 
 
 @router.get("/feedback/stats")
-def get_feedback_stats(session_id: Optional[str] = None):
+def get_feedback_stats(request: Request, session_id: Optional[str] = None):
     service = _require_mastery("反馈服务未初始化")
+    require_session_owner(session_id, request)
     try:
         return service.get_feedback_stats(session_id)
     except Exception as e:
