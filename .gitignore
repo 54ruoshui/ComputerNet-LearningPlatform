@@ -44,7 +44,7 @@ docs/*中期检查*
  
 requirements/
 
-mastery.*
+mastery.db*
 CLAUDE.md
 TODO.md
 graphrag_checkpoints.*
