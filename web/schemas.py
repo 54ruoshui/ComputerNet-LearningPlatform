@@ -123,6 +123,7 @@ class TrialTestStartRequest(BaseModel):
 
 class TrialTestSubmitRequest(BaseModel):
     test_id: int = Field(..., ge=1)
+    code: str = Field(..., min_length=2, max_length=20, description="被试码，须与开始测试时一致")
     answers: Dict[str, str] = Field(..., description="题目ID→答案映射，如 {'q1': 'A'}")
 
 

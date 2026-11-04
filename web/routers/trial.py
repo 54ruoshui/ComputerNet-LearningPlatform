@@ -108,7 +108,7 @@ def start_trial_test(req: TrialTestStartRequest, service=Depends(get_trial_servi
 @router.post("/test/submit")
 def submit_trial_test(req: TrialTestSubmitRequest, service=Depends(get_trial_service)):
     try:
-        return service.submit_test(req.test_id, req.answers)
+        return service.submit_test(req.test_id, req.answers, req.code)
     except HTTPException:
         raise
     except ValueError as e:

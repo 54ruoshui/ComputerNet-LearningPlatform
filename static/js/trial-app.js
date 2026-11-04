@@ -533,6 +533,7 @@
             $("takeSubmitBtn").textContent = "提交中...";
             const result = await apiPost("/api/trial/test/submit", {
                 test_id: testState.testId,
+                code: partState.code,
                 answers: testState.answers,
             });
             $("partTakeView").style.display = "none";

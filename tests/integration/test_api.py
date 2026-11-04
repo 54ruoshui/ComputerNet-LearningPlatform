@@ -721,10 +721,12 @@ class TestTrialEndpoints:
         for q in body["questions"]:
             assert "correct_answer" not in q
 
-        resp = client.post("/api/trial/test/submit", json={"test_id": 7, "answers": {"q1": "A"}})
+        resp = client.post("/api/trial/test/submit", json={
+            "test_id": 7, "code": "P0001", "answers": {"q1": "A"}
+        })
         assert resp.status_code == 200
         assert resp.json()["accuracy"] == 1.0
-        mock_trial.submit_test.assert_called_once_with(7, {"q1": "A"})
+        mock_trial.submit_test.assert_called_once_with(7, {"q1": "A"}, "P0001")
 
     def test_analysis_and_report(self, client_with_trial):
         client, _ = client_with_trial

@@ -195,12 +195,16 @@ class TrialService:
         # 按试卷既定顺序返回，缺题跳过
         return [by_id[qid] for qid in question_ids if qid in by_id]
 
-    def submit_test(self, test_id: int, answers: Dict[str, str]) -> dict:
+    def submit_test(self, test_id: int, answers: Dict[str, str], code: str) -> dict:
         test = self._tracker.get_trial_test(test_id)
         if not test:
             raise ValueError(f"测试记录 {test_id} 不存在")
         if test["submitted_at"]:
             raise ValueError("该测试已提交，不可重复提交")
+        # test_id 是自增整数可枚举，必须校验提交者凭被试码与归属被试一致，防替他人交卷
+        participant = self._tracker.get_participant_by_code(code)
+        if not participant or participant["id"] != test["participant_id"]:
+            raise ValueError("被试码与该测试不匹配，无权提交")
 
         questions = self._fetch_questions(test["question_ids"], with_answers=True)
         details = []

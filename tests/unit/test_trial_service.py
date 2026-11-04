@@ -96,7 +96,7 @@ def take_test(service, code, phase, wrong_positions=()):
     answers = {}
     for idx, q in enumerate(started["questions"]):
         answers[q["id"]] = "B" if idx in wrong_positions else "A"
-    return service.submit_test(started["test_id"], answers)
+    return service.submit_test(started["test_id"], answers, code)
 
 
 class TestCreateTrial:
@@ -160,9 +160,21 @@ class TestTakingTests:
     def test_double_submit_rejected(self, service):
         trial_id, codes = complete_trial(service, service._tracker)
         started = service.start_test(codes[0], "pre")
-        service.submit_test(started["test_id"], {})
+        service.submit_test(started["test_id"], {}, codes[0])
         with pytest.raises(ValueError, match="已提交"):
-            service.submit_test(started["test_id"], {})
+            service.submit_test(started["test_id"], {}, codes[0])
+
+    def test_submit_with_wrong_code_rejected(self, service):
+        """test_id 可枚举：他人凭自己的被试码或错误码不能替交别人的测试"""
+        trial_id, codes = complete_trial(service, service._tracker)
+        started = service.start_test(codes[0], "pre")
+        with pytest.raises(ValueError, match="无权"):
+            service.submit_test(started["test_id"], {}, codes[1])  # 另一被试的码
+        with pytest.raises(ValueError, match="无权"):
+            service.submit_test(started["test_id"], {}, "P9999")  # 不存在的码
+        # 正确的码仍可正常提交
+        result = service.submit_test(started["test_id"], {}, codes[0])
+        assert result["test_id"] == started["test_id"]
 
     def test_auto_code_generation(self, service):
         created = service.create_trial("T", per_layer=2, seed=1)
