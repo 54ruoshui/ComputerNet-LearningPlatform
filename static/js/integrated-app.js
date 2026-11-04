@@ -212,7 +212,7 @@ function showMessage(message, type) {
 
     const toast = document.createElement('div');
     toast.className = 'toast-msg toast-' + type;
-    toast.innerHTML = '<i class="' + (icons[type] || icons.info) + '"></i><span>' + message + '</span>';
+    toast.innerHTML = '<i class="' + (icons[type] || icons.info) + '"></i><span>' + escapeHtml(message) + '</span>';
 
     messageContainer.appendChild(toast);
 
@@ -273,7 +273,7 @@ function formatAnswer(answer) {
             }
             var level = trimmed.match(/^(#+)/)[1].length;
             var title = trimmed.replace(/^#+\s/, '');
-            formattedLines.push('<h' + Math.min(level + 2, 6) + ' class="mt-3 mb-2">' + processInlineFormatting(title) + '</h' + Math.min(level + 2, 6) + '>');
+            formattedLines.push('<h' + Math.min(level + 2, 6) + ' class="mt-3 mb-2">' + processInlineFormatting(escapeHtml(title)) + '</h' + Math.min(level + 2, 6) + '>');
             continue;
         }
 
@@ -284,7 +284,7 @@ function formatAnswer(answer) {
                 listType = null;
             }
             var quote = trimmed.replace(/^>\s/, '');
-            formattedLines.push('<blockquote class="border-left border-primary pl-3">' + processInlineFormatting(quote) + '</blockquote>');
+            formattedLines.push('<blockquote class="border-left border-primary pl-3">' + processInlineFormatting(escapeHtml(quote)) + '</blockquote>');
             continue;
         }
 
@@ -296,7 +296,7 @@ function formatAnswer(answer) {
                 listType = 'ordered';
             }
             var item = trimmed.replace(/^\d+\.\s/, '');
-            formattedLines.push('<li>' + processInlineFormatting(item) + '</li>');
+            formattedLines.push('<li>' + processInlineFormatting(escapeHtml(item)) + '</li>');
             continue;
         }
 
@@ -308,7 +308,7 @@ function formatAnswer(answer) {
                 listType = 'unordered';
             }
             var item2 = trimmed.replace(/^[-*•]\s/, '');
-            formattedLines.push('<li>' + processInlineFormatting(item2) + '</li>');
+            formattedLines.push('<li>' + processInlineFormatting(escapeHtml(item2)) + '</li>');
             continue;
         }
 
@@ -318,7 +318,7 @@ function formatAnswer(answer) {
             listType = null;
         }
 
-        formattedLines.push('<p class="mb-2">' + processInlineFormatting(line) + '</p>');
+        formattedLines.push('<p class="mb-2">' + processInlineFormatting(escapeHtml(line)) + '</p>');
     }
 
     if (inList) {
@@ -329,6 +329,7 @@ function formatAnswer(answer) {
 }
 
 function processInlineFormatting(text) {
+    // 输入必须已经 escapeHtml；此处只还原 markdown 行内语法，链接 URL 走白名单
     var formatted = text.replace(/`([^`]+)`/g, '<code class="bg-light px-1 rounded">$1</code>');
     formatted = formatted.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
     formatted = formatted.replace(/\*\*\*([^*\n]+)\*\*\*/g, '<strong><em>$1</em></strong>');
@@ -336,8 +337,19 @@ function processInlineFormatting(text) {
     formatted = formatted.replace(/__([^_\n]+)__/g, '<em>$1</em>');
     formatted = formatted.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
     formatted = formatted.replace(/<strong><em>([^<]+)<\/em><\/strong>/g, '<strong>$1</strong>');
-    formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-primary">$1</a>');
+    formatted = formatted.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (_, label, url) {
+        var href = safeHref(url);
+        if (!href) return label;
+        return '<a href="' + href + '" target="_blank" rel="noopener" class="text-primary">' + label + '</a>';
+    });
     return formatted;
+}
+
+function safeHref(url) {
+    // 协议白名单，拦截 javascript:/data: 等；url 来自已转义文本，还原 & 后校验，引号再编码防属性逃逸
+    var decoded = url.replace(/&amp;/g, '&');
+    if (!/^(https?:\/\/|mailto:|\/|#)/i.test(decoded)) return null;
+    return url.replace(/"/g, '%22');
 }
 
 function escapeHtml(text) {
@@ -806,7 +818,7 @@ async function submitQuery() {
             var errMsg = document.createElement('div');
             errMsg.className = 'chat-msg chat-msg-ai';
             errMsg.innerHTML = '<div class="msg-avatar"><i class="fas fa-exclamation-triangle"></i></div>' +
-                '<div class="msg-bubble msg-bubble-ai"><div class="msg-content"><p style="color:var(--red)">' + (error.message || '查询失败，请稍后再试') + '</p></div></div>';
+                '<div class="msg-bubble msg-bubble-ai"><div class="msg-content"><p style="color:var(--red)">' + escapeHtml(error.message || '查询失败，请稍后再试') + '</p></div></div>';
             chatMessages.appendChild(errMsg);
         }
     } finally {

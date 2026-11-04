@@ -10,6 +10,7 @@
 
     let currentStudent = null; // {session_id, nickname}
     let currentReport = "";
+    let currentStudents = []; // 列表数据，供行点击委托取回（昵称等不再进内联 onclick）
 
     async function apiGet(url) {
         const res = await fetch(url);
@@ -58,6 +59,7 @@
             return;
         }
         const students = data.students || [];
+        currentStudents = students;
         renderSummary(students);
         if (!students.length) {
             tbody.innerHTML = '<tr><td colspan="8"><div class="quiz-empty"><p>暂无学生学习记录</p></div></td></tr>';
@@ -72,7 +74,7 @@
                 : "";
             const mastery = s.mastered_total ? s.mastered_count + "/" + s.mastered_total : "-";
             return (
-                "<tr onclick=\"openDetail('" + esc(s.session_id) + "', '" + esc(s.nickname) + "')\">" +
+                "<tr class=\"teacher-row\" data-sid=\"" + esc(s.session_id) + "\">" +
                 '<td><div class="teacher-student-cell">' +
                 '<span class="' + avatarCls + '">' + initial + "</span>" +
                 '<span class="teacher-nickname">' + esc(s.nickname) + "</span>" + roleBadge +
@@ -282,7 +284,6 @@
 
     // 暴露给内联 onclick
     window.loadStudents = loadStudents;
-    window.openDetail = openDetail;
     window.backToList = backToList;
     window.exportDetailReport = exportDetailReport;
     window.closeReportModal = closeReportModal;
@@ -290,6 +291,13 @@
     window.downloadReport = downloadReport;
 
     // ==================== 初始化 ====================
+
+    $("studentRows").addEventListener("click", (e) => {
+        const tr = e.target.closest("tr[data-sid]");
+        if (!tr) return;
+        const s = currentStudents.find((x) => x.session_id === tr.dataset.sid);
+        if (s) openDetail(s.session_id, s.nickname);
+    });
 
     loadStudents();
 })();

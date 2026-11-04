@@ -366,9 +366,9 @@
             box.className = "quiz-explanation " + (result.correct ? "correct-bg" : "wrong-bg");
             box.innerHTML = `
                 <div class="explanation-label ${result.correct ? "explanation-correct" : "explanation-wrong"}">
-                    ${result.correct ? "正确" : "错误，正确答案: " + result.correct_answer}
+                    ${result.correct ? "正确" : "错误，正确答案: " + escapeHtml(result.correct_answer)}
                 </div>
-                <div>${result.explanation}</div>`;
+                <div>${escapeHtml(result.explanation)}</div>`;
 
             $("submitBtn").style.display = "none";
             $("nextBtn").style.display = "inline-flex";
@@ -450,9 +450,9 @@
                 <div class="wrong-item" data-id="${w.id}">
                     <div class="wrong-item-header" onclick="toggleWrongDetail('${w.id}')">
                         <div class="wrong-item-info">
-                            <span class="wrong-tag ${w.difficulty}">${diffLabel[w.difficulty] || w.difficulty}</span>
-                            <span class="wrong-tag layer">${w.layer}</span>
-                            <span class="wrong-item-text">${w.text}</span>
+                            <span class="wrong-tag ${w.difficulty}">${escapeHtml(diffLabel[w.difficulty] || w.difficulty)}</span>
+                            <span class="wrong-tag layer">${escapeHtml(w.layer)}</span>
+                            <span class="wrong-item-text">${escapeHtml(w.text)}</span>
                         </div>
                         <i class="fas fa-chevron-down wrong-arrow" id="arrow_${w.id}"></i>
                     </div>
@@ -469,12 +469,12 @@
                                     : (isSelected ? '<i class="fas fa-xmark" style="color:var(--red);margin-left:auto;font-size:10px;"></i>' : '');
                                 return `<div class="${cls}">
                                     <span class="wrong-opt-letter">${l}</span>
-                                    <span>${w["option_" + l.toLowerCase()]}</span>${mark}</div>`;
+                                    <span>${escapeHtml(w["option_" + l.toLowerCase()])}</span>${mark}</div>`;
                             }).join("")
                         }</div>
                         <div class="wrong-explanation">
                             <div class="explanation-label explanation-wrong">解析</div>
-                            <div>${w.explanation}</div>
+                            <div>${escapeHtml(w.explanation)}</div>
                         </div>
                         <button class="btn-remove-wrong" onclick="removeWrongItem('${w.id}')">
                             <i class="fas fa-trash-can"></i> 移出错题集
@@ -988,14 +988,14 @@
             if (analysis.weak_areas) {
                 for (var i = 0; i < analysis.weak_areas.length; i++) {
                     var wa = analysis.weak_areas[i];
-                    tagsHtml += '<span class="weak-area-tag">' + wa.value + '</span>';
+                    tagsHtml += '<span class="weak-area-tag">' + escapeHtml(wa.value) + '</span>';
                 }
             }
             $("examAnalysisCard").innerHTML =
                 '<div class="analysis-header"><i class="fas fa-robot"></i> AI 薄弱点分析</div>' +
-                '<div class="analysis-summary">' + analysis.summary + '</div>' +
+                '<div class="analysis-summary">' + escapeHtml(analysis.summary) + '</div>' +
                 (tagsHtml ? '<div class="weak-area-tags">' + tagsHtml + '</div>' : '') +
-                (analysis.study_advice ? '<div class="study-advice"><strong>学习建议：</strong>' + analysis.study_advice + '</div>' : '');
+                (analysis.study_advice ? '<div class="study-advice"><strong>学习建议：</strong>' + escapeHtml(analysis.study_advice) + '</div>' : '');
         } else {
             $("examAnalysisCard").style.display = "none";
         }
