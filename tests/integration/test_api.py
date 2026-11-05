@@ -706,6 +706,61 @@ def client_with_trial(mock_engine):
     web_mod.deps.trial_service = orig["trial_service"]
 
 
+class TestQueryStreamEndpoint:
+
+    def test_stream_yields_events_despite_body_sniff(self, client, mock_engine):
+        """限流器 body 嗅探后重放 receive 不得伪造 http.disconnect，否则 StreamingResponse 立即被取消（SSE 空流）。
+
+        TestClient 的 receive 不会主动派发 disconnect，复现不了；这里按 uvicorn 语义
+        裸调 ASGI app：body 消息之后 receive 阻塞直到真实断连。
+        """
+        import asyncio
+        import web.graph_rag_web as web_mod
+
+        async def fake_stream(*args, **kwargs):
+            await asyncio.sleep(0.1)  # 真实引擎首个事件前有检索等异步工作，确保竞态偏向伪 disconnect 一侧
+            yield 'event: status\ndata: {"msg": "检索中"}\n\n'
+            yield 'event: token\ndata: {"content": "TCP"}\n\n'
+            yield 'event: done\ndata: {"session_id": "s1", "elapsed": 1.0}\n\n'
+        mock_engine.query_stream = fake_stream
+
+        body = json.dumps({"question": "什么是TCP？", "session_id": "s1"}).encode()
+        scope = {
+            "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1",
+            "method": "POST", "path": "/api/query/stream", "raw_path": b"/api/query/stream",
+            "query_string": b"",
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+            ],
+            "client": ("127.0.0.1", 12345), "server": ("test", 80), "scheme": "http",
+        }
+        pending_body = [{"type": "http.request", "body": body, "more_body": False}]
+
+        async def receive():
+            if pending_body:
+                return pending_body.pop(0)
+            await asyncio.sleep(3600)  # uvicorn 语义：body 后阻塞直到真实断连
+
+        sent = []
+
+        async def send(m):
+            sent.append(m)
+
+        async def run():
+            await asyncio.wait_for(web_mod.app(scope, receive, send), timeout=30)
+
+        asyncio.run(run())
+
+        body_msgs = [m for m in sent if m["type"] == "http.response.body"]
+        assert any(m.get("more_body") for m in body_msgs), \
+            f"流式响应没有产出任何 body 消息（被伪造 disconnect 取消）: {[m['type'] for m in sent]}"
+        payload = b"".join(m.get("body", b"") for m in body_msgs).decode()
+        assert "event: status" in payload
+        assert "event: token" in payload
+        assert "event: done" in payload
+
+
 class TestTrialEndpoints:
 
     def test_returns_503_when_not_initialized(self, client):

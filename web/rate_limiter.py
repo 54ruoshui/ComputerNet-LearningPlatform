@@ -147,16 +147,15 @@ async def _sniff_session_and_replay(scope, receive):
         except (ValueError, UnicodeDecodeError):
             pass
 
-    # 先交还完整 body（单条 full-body 消息），耗尽后按断连处理
-    pending = [
-        {"type": "http.request", "body": body, "more_body": False},
-        {"type": "http.disconnect"},
-    ]
+    # 先交还完整 body（单条 full-body 消息），之后透传真实 receive：
+    # 伪造 http.disconnect 会被 StreamingResponse 的断连监听当成客户端断开，
+    # 立即取消流式生成器（SSE 空流），故必须保留真实断连语义
+    pending = [{"type": "http.request", "body": body, "more_body": False}]
 
     async def replay():
         if pending:
             return pending.pop(0)
-        return {"type": "http.disconnect"}
+        return await receive()
 
     return session_id, replay
 
