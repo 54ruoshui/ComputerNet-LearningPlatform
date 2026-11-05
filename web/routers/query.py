@@ -27,13 +27,25 @@ router = APIRouter(prefix="/api", tags=["query"])
 GATE_BUSY_MESSAGE = "当前查询人数较多，请稍后重试"
 
 
+def _prepare_session(req: QueryRequest, request: Request, engine) -> None:
+    """会话预处理：已有会话校验归属；未带 session_id 就地新建并绑定访客。
+
+    隐式创建的会话若不绑定访客，将不会出现在该访客的会话列表里。
+    """
+    if req.session_id:
+        session_id_var.set(req.session_id)
+        if not ensure_session_owner(req.session_id, request):
+            raise HTTPException(status_code=404, detail="会话不存在")
+    else:
+        req.session_id = engine.new_session()
+        session_id_var.set(req.session_id)
+        bind_session(req.session_id, request)
+
+
 @router.post("/query")
 def query(req: QueryRequest, request: Request, engine=Depends(get_langgraph_engine)):
     try:
-        if req.session_id:
-            session_id_var.set(req.session_id)
-            if not ensure_session_owner(req.session_id, request):
-                raise HTTPException(status_code=404, detail="会话不存在")
+        _prepare_session(req, request, engine)
 
         logger.info("LangGraph 查询", session_id=req.session_id, question=req.question[:100])
 
@@ -85,10 +97,7 @@ def query(req: QueryRequest, request: Request, engine=Depends(get_langgraph_engi
 @router.post("/query/stream")
 async def query_stream(req: QueryRequest, request: Request, engine=Depends(get_langgraph_engine)):
     """流式查询：SSE 逐 token 推送 + 工具状态 + 图谱数据"""
-    if req.session_id:
-        session_id_var.set(req.session_id)
-        if not ensure_session_owner(req.session_id, request):
-            raise HTTPException(status_code=404, detail="会话不存在")
+    _prepare_session(req, request, engine)
 
     mastery_context = ""
     if req.session_id and deps.mastery_service:
@@ -136,28 +145,34 @@ async def query_stream(req: QueryRequest, request: Request, engine=Depends(get_l
 @router.get("/sessions")
 def list_sessions(request: Request, engine=Depends(get_langgraph_engine)):
     try:
-        sessions = engine.list_sessions()
+        threads = engine.list_session_summaries()
         tracker = deps._get_tracker()
         visitor = visitor_id(request)
         user = deps.resolve_user(request)
         user_set = set()
         if user and deps.auth_service:
             user_set = {s["session_id"] for s in deps.auth_service.list_user_sessions(user["id"])}
+        owned = None
         if tracker and visitor:
             owned = set(tracker.list_sessions_for_visitor(visitor)) | user_set
-            sessions = [s for s in sessions if s in owned]
         summaries = []
-        for sid in sessions:
+        for thread in threads:
+            sid = thread["session_id"]
+            if owned is not None and sid not in owned:
+                continue
             history = engine.get_session_history(sid)
-            if history:
-                summaries.append({
-                    "session_id": sid,
-                    "last_question": next(
-                        (m["content"] for m in reversed(history) if m["role"] == "user"), ""
-                    ),
-                    "message_count": len(history),
-                    "user_owned": sid in user_set,
-                })
+            if not history:
+                continue
+            user_rounds = [m["content"] for m in history if m["role"] == "user"]
+            summaries.append({
+                "session_id": sid,
+                "title": (user_rounds[0].strip()[:60] if user_rounds else "新对话"),
+                "rounds": len(user_rounds),
+                "updated_at": thread.get("updated_at", ""),
+                "user_owned": sid in user_set,
+            })
+            if len(summaries) >= 50:
+                break
         return {"sessions": summaries}
     except Exception as e:
         logger.error("列出会话失败", error=str(e))

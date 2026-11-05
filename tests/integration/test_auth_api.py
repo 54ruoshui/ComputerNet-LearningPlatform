@@ -191,7 +191,11 @@ class TestSessionRecovery:
 
     def test_sessions_list_merges_user_and_visitor(self, client_with_auth, mock_engine):
         client, tracker, auth = client_with_auth
-        mock_engine.list_sessions.return_value = ["sess-mine", "sess-other-visitor", "sess-account-old"]
+        mock_engine.list_session_summaries.return_value = [
+            {"session_id": "sess-mine", "updated_at": "2026-11-05T10:00:00+00:00"},
+            {"session_id": "sess-other-visitor", "updated_at": "2026-11-05T09:00:00+00:00"},
+            {"session_id": "sess-account-old", "updated_at": "2026-11-05T08:00:00+00:00"},
+        ]
         mock_engine.get_session_history.return_value = [
             {"role": "user", "content": "什么是TCP?"},
             {"role": "assistant", "content": "…"},
@@ -213,6 +217,11 @@ class TestSessionRecovery:
         assert ids["sess-mine"]["user_owned"] is True
         assert ids["sess-account-old"]["user_owned"] is True
         assert ids["sess-other-visitor"]["user_owned"] is False
+        # 会话摘要字段：标题取首个提问，轮次按用户消息数，按最近活跃排序
+        assert ids["sess-mine"]["title"] == "什么是TCP?"
+        assert ids["sess-mine"]["rounds"] == 1
+        assert ids["sess-mine"]["updated_at"] == "2026-11-05T10:00:00+00:00"
+        assert [s["session_id"] for s in sessions][0] == "sess-mine"
 
     def test_new_session_attaches_to_logged_in_user(self, client_with_auth, mock_engine):
         client, tracker, auth = client_with_auth

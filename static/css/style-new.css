@@ -268,8 +268,14 @@ body {
     cursor: pointer;
     transition: all var(--duration) var(--ease);
     margin-bottom: 2px;
+    position: relative;
+    padding-right: 30px;
 }
 .history-item:hover { background: var(--bg-2); }
+.history-item.active {
+    background: var(--bg-2);
+}
+.history-item.active .history-question { color: var(--text-1); }
 
 .history-question {
     font-size: 13px;
@@ -288,6 +294,26 @@ body {
     color: var(--text-4);
     margin-top: 3px;
 }
+
+.history-del {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--text-4);
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+.history-item:hover .history-del { display: flex; }
+.history-del:hover { color: #e74c3c; background: rgba(231, 76, 60, 0.12); }
 
 .history-empty {
     text-align: center;

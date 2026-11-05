@@ -243,9 +243,13 @@ class TestQueryEndpoint:
         assert resp.status_code == 422
 
     def test_query_without_session_id(self, client, mock_engine):
+        mock_engine.new_session.return_value = "implicit-session"
         resp = client.post("/api/query", json={"question": "test"})
         assert resp.status_code == 200
         mock_engine.query.assert_called_once()
+        # 未携带 session_id 时就地新建会话，保证它能出现在该访客的会话列表里
+        mock_engine.new_session.assert_called_once()
+        assert mock_engine.query.call_args.kwargs["session_id"] == "implicit-session"
 
 
 # ---------- Sessions ----------
@@ -296,7 +300,10 @@ class TestSessionOwnership:
         client, tracker = client_with_sessions
         client.post("/api/sessions/new")  # new-session-id 绑定到当前访客
         tracker.bind_session("stranger-session", "another-visitor")
-        mock_engine.list_sessions.return_value = ["new-session-id", "stranger-session"]
+        mock_engine.list_session_summaries.return_value = [
+            {"session_id": "new-session-id", "updated_at": "2026-11-05T10:00:00+00:00"},
+            {"session_id": "stranger-session", "updated_at": "2026-11-05T09:00:00+00:00"},
+        ]
 
         ids = [s["session_id"] for s in client.get("/api/sessions").json()["sessions"]]
         assert "new-session-id" in ids

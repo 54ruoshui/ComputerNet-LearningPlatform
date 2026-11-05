@@ -179,6 +179,33 @@ class TestSessionManagement:
         )
         assert agent_with_mocks.list_sessions() == ["thread-b", "thread-a"]
 
+    def test_list_session_summaries_sorted_by_latest_ts(self, agent_with_mocks):
+        from types import SimpleNamespace
+
+        def tuple_(tid, ts):
+            return SimpleNamespace(
+                config={"configurable": {"thread_id": tid}},
+                checkpoint={"ts": ts},
+            )
+
+        agent_with_mocks._db_conn = object()
+        agent_with_mocks.checkpointer.list = MagicMock(
+            return_value=iter([
+                tuple_("thread-a", "2026-11-05T08:00:00+00:00"),
+                tuple_("thread-b", "2026-11-05T10:00:00+00:00"),
+                tuple_("thread-a", "2026-11-05T09:00:00+00:00"),  # 同 thread 旧 checkpoint
+            ])
+        )
+        summaries = agent_with_mocks.list_session_summaries()
+        assert summaries == [
+            {"session_id": "thread-b", "updated_at": "2026-11-05T10:00:00+00:00"},
+            {"session_id": "thread-a", "updated_at": "2026-11-05T09:00:00+00:00"},
+        ]
+
+    def test_list_session_summaries_without_db_returns_empty(self, agent_with_mocks):
+        agent_with_mocks._db_conn = None
+        assert agent_with_mocks.list_session_summaries() == []
+
     def test_new_session(self, agent_with_mocks):
         sid = agent_with_mocks.new_session()
         assert sid in agent_with_mocks._sessions

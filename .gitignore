@@ -47,4 +47,4 @@ requirements/
 mastery.db*
 CLAUDE.md
 TODO.md
-graphrag_checkpoints.*
+graphrag_checkpoints.*finetune/qwen3-8b-cnnet-lora/*.safetensors

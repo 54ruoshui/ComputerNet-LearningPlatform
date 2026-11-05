@@ -491,6 +491,30 @@ class GraphRAGAgent:
                 logger.warning("从 checkpointer 列出会话失败，回退内存集合", error=str(e))
         return list(self._sessions)
 
+    def list_session_summaries(self) -> list[dict]:
+        """会话摘要（含最近活跃时间），按活跃时间倒序。
+
+        updated_at 取该 thread 最新 checkpoint 的 ts（ISO 字符串，同格式可按字典序比较）。
+        """
+        if not self._db_conn:
+            return []
+        try:
+            last_ts: dict[str, str] = {}
+            for ckpt in self.checkpointer.list(None):
+                tid = ckpt.config.get("configurable", {}).get("thread_id")
+                if not tid:
+                    continue
+                ts = (ckpt.checkpoint or {}).get("ts") or ""
+                if ts >= last_ts.get(tid, ""):
+                    last_ts[tid] = ts
+            return [
+                {"session_id": tid, "updated_at": ts}
+                for tid, ts in sorted(last_ts.items(), key=lambda kv: kv[1], reverse=True)
+            ]
+        except Exception as e:
+            logger.warning("从 checkpointer 列出会话摘要失败", error=str(e))
+            return []
+
     def new_session(self) -> str:
         session_id = str(uuid.uuid4())
         self._sessions.add(session_id)

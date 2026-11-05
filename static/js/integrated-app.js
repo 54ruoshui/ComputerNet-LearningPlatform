@@ -6,7 +6,7 @@
 // Global state
 let isRecording = false;
 let recognition = null;
-let queryHistory = [];
+let conversations = [];
 let currentSessionId = localStorage.getItem('graphrag_session_id') || null;
 
 function setCurrentSessionId(id) {
@@ -85,115 +85,142 @@ function toggleVoiceRecognition() {
     }
 }
 
-// ==================== Query History (session-based) ====================
+// ==================== Conversation List (会话级历史) ====================
 
-async function loadQueryHistory() {
-    if (!currentSessionId) {
-        queryHistory = [];
-        updateHistoryDisplay();
-        return;
-    }
+async function loadConversationList() {
     try {
-        const sessionHistory = await loadSessionHistory();
-        // Pair user messages with following assistant messages
-        const paired = [];
-        for (let i = 0; i < sessionHistory.length; i++) {
-            if (sessionHistory[i].role === 'user') {
-                const answer = (i + 1 < sessionHistory.length && sessionHistory[i + 1].role === 'assistant')
-                    ? sessionHistory[i + 1].content : '';
-                paired.push({
-                    question: sessionHistory[i].content,
-                    answer: answer,
-                    processingTime: 0,
-                    timestamp: new Date().toISOString()
-                });
-            }
-        }
-        queryHistory = paired.reverse();
-        updateHistoryDisplay();
+        const response = await fetch('/api/sessions');
+        if (!response.ok) throw new Error();
+        const data = await response.json();
+        conversations = data.sessions || [];
     } catch (e) {
-        queryHistory = [];
-        updateHistoryDisplay();
+        conversations = [];
     }
+    updateConversationDisplay();
 }
 
-async function saveQueryHistory() {
-    // no-op: session history is auto-saved by backend checkpointer
+function formatConversationTime(iso) {
+    if (!iso) return '';
+    const date = new Date(iso);
+    if (isNaN(date.getTime())) return '';
+    const diffMin = Math.floor((Date.now() - date.getTime()) / 60000);
+    if (diffMin < 1) return '刚刚';
+    if (diffMin < 60) return diffMin + ' 分钟前';
+    if (diffMin < 24 * 60) return Math.floor(diffMin / 60) + ' 小时前';
+    return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
 }
 
-async function addToHistory(question, answer, processingTime) {
-    const historyItem = {
-        question: question,
-        answer: answer,
-        processingTime: processingTime || 0,
-        timestamp: new Date().toISOString()
-    };
-    queryHistory.unshift(historyItem);
-    if (queryHistory.length > 50) {
-        queryHistory = queryHistory.slice(0, 50);
-    }
-    updateHistoryDisplay();
-}
-
-function updateHistoryDisplay() {
+function updateConversationDisplay() {
     const historyList = document.getElementById('historyList');
-    const historyContainer = document.getElementById('historyContainer');
     if (!historyList) return;
 
-    if (queryHistory.length === 0) {
+    if (conversations.length === 0) {
         historyList.innerHTML = `
             <div class="history-empty" id="historyContainer">
                 <i class="far fa-comment-dots"></i>
-                <span>暂无记录</span>
+                <span>暂无会话</span>
             </div>
         `;
         return;
     }
 
     historyList.innerHTML = '';
-    queryHistory.forEach(function(item) {
+    conversations.forEach(function(conv) {
         const el = document.createElement('div');
-        el.className = 'history-item';
-
-        const date = new Date(item.timestamp);
-        const timeString = date.toLocaleString('zh-CN', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-
+        el.className = 'history-item' + (conv.session_id === currentSessionId ? ' active' : '');
         el.innerHTML = `
-            <div class="history-question">${escapeHtml(item.question)}</div>
-            <div class="history-time">${timeString}${item.processingTime ? ' · ' + item.processingTime.toFixed(1) + 's' : ''}</div>
+            <div class="history-question">${escapeHtml(conv.title || '新对话')}</div>
+            <div class="history-time">${conv.rounds} 轮对话 · ${formatConversationTime(conv.updated_at)}</div>
         `;
+        el.onclick = function() { switchToConversation(conv.session_id); };
 
-        el.onclick = function() {
-            const questionInput = document.getElementById('questionInput');
-            if (questionInput) {
-                questionInput.value = item.question;
-                submitQuery();
-            }
+        const del = document.createElement('button');
+        del.className = 'history-del';
+        del.title = '删除会话';
+        del.innerHTML = '<i class="fas fa-xmark"></i>';
+        del.onclick = function(ev) {
+            ev.stopPropagation();
+            deleteConversation(conv.session_id);
         };
+        el.appendChild(del);
 
         historyList.appendChild(el);
     });
 }
 
-async function clearHistory() {
-    if (confirm('确定要清空当前会话的所有记录吗？')) {
-        queryHistory = [];
-        updateHistoryDisplay();
-        if (currentSessionId) {
-            try {
-                await fetch('/api/sessions/' + currentSessionId, { method: 'DELETE' });
-                currentSessionId = null;
-                localStorage.removeItem('graphrag_session_id');
-                updateSessionIndicator();
-            } catch (e) { /* silently fail */ }
-        }
-        showMessage('会话记录已清空', 'success');
+async function switchToConversation(sessionId) {
+    if (activeQuery || sessionId === currentSessionId) return;
+    setCurrentSessionId(sessionId);
+    updateSessionIndicator();
+    try {
+        const response = await fetch('/api/sessions/' + sessionId + '/history');
+        if (!response.ok) throw new Error();
+        const data = await response.json();
+        renderRestoredConversation(data.history || []);
+    } catch (e) {
+        showMessage('加载会话失败', 'error');
     }
+    updateConversationDisplay();
+    loadMasteryState();
+}
+
+function renderRestoredConversation(history) {
+    const chatMessages = document.getElementById('chatMessages');
+    if (!chatMessages) return;
+    chatMessages.querySelectorAll('.chat-msg').forEach(function(m) { m.remove(); });
+
+    const welcome = document.getElementById('welcomeBlock');
+    if (welcome) welcome.style.display = history.length ? 'none' : '';
+
+    history.forEach(function(msg) {
+        const el = document.createElement('div');
+        if (msg.role === 'user') {
+            el.className = 'chat-msg chat-msg-user';
+            el.innerHTML = '<div class="msg-bubble msg-bubble-user">' + escapeHtml(msg.content) + '</div>';
+        } else if (msg.content) {
+            el.className = 'chat-msg chat-msg-ai';
+            el.innerHTML = '<div class="msg-avatar"><i class="fas fa-sparkles"></i></div>' +
+                '<div class="msg-bubble msg-bubble-ai"><div class="msg-content">' +
+                formatAnswer(msg.content) + '</div></div>';
+        } else {
+            return;
+        }
+        chatMessages.appendChild(el);
+    });
+
+    const chatScroll = document.getElementById('chatScroll');
+    if (chatScroll) chatScroll.scrollTop = chatScroll.scrollHeight;
+}
+
+async function deleteConversation(sessionId) {
+    if (!confirm('确定删除该会话及其全部对话记录吗？')) return;
+    try {
+        await fetch('/api/sessions/' + sessionId, { method: 'DELETE' });
+    } catch (e) { /* silent */ }
+    if (sessionId === currentSessionId) {
+        setCurrentSessionId(null);
+        updateSessionIndicator();
+        renderRestoredConversation([]);
+    }
+    loadConversationList();
+    showMessage('会话已删除', 'success');
+}
+
+async function clearHistory() {
+    if (!conversations.length) {
+        showMessage('暂无会话记录', 'info');
+        return;
+    }
+    if (!confirm('确定清空全部 ' + conversations.length + ' 个会话记录吗？此操作不可恢复。')) return;
+    const ids = conversations.map(function(c) { return c.session_id; });
+    await Promise.all(ids.map(function(id) {
+        return fetch('/api/sessions/' + id, { method: 'DELETE' }).catch(function() {});
+    }));
+    setCurrentSessionId(null);
+    updateSessionIndicator();
+    renderRestoredConversation([]);
+    loadConversationList();
+    showMessage('会话记录已清空', 'success');
 }
 
 // ==================== Toast Notifications ====================
@@ -838,7 +865,7 @@ async function submitQuery(fromStopButton) {
                     });
                     bubble.appendChild(fbWrap);
                 }
-                addToHistory(question, answerText, payload.elapsed || 0);
+                loadConversationList();
             } else if (type === 'error') {
                 if (contentEl) {
                     contentEl.innerHTML = '<div class="error-msg">查询失败: ' + escapeHtml(payload.msg) + '</div>';
@@ -915,6 +942,7 @@ async function startNewSession() {
     var welcome = document.getElementById('welcomeBlock');
     if (welcome) welcome.style.display = '';
 
+    loadConversationList();
     loadMasteryState();
     showMessage('已开始新会话', 'info');
 }
@@ -962,6 +990,7 @@ async function deleteCurrentSession() {
     }
     setCurrentSessionId(null);
     updateSessionIndicator();
+    loadConversationList();
 }
 
 async function _expandNodeNeighbors(nodeName) {
@@ -1074,7 +1103,7 @@ function checkBrowserCompatibility() {
 
 document.addEventListener('DOMContentLoaded', function() {
     initSpeechRecognition();
-    loadQueryHistory();
+    loadConversationList();
     loadTheme();
     setupKeyboardShortcuts();
     loadGraphStats();
