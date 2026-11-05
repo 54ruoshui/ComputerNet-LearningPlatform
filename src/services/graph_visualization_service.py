@@ -108,8 +108,15 @@ class GraphVisualizationService:
                         except Exception:
                             nodes.append({"name": name, "name_en": "", "type": "Node", "description": ""})
 
-                graph_data["nodes"] = nodes[:20]
-                graph_data["relationships"] = relationships
+                # 节点截断后必须同步过滤关系：悬空引用会让 d3 forceLink 抛
+                # "node not found"，渲染中断导致所有节点堆在原点
+                kept_nodes = nodes[:20]
+                kept_names = {n["name"] for n in kept_nodes}
+                graph_data["nodes"] = kept_nodes
+                graph_data["relationships"] = [
+                    rel for rel in relationships
+                    if rel["start"]["name"] in kept_names and rel["end"]["name"] in kept_names
+                ]
 
         except Exception as e:
             logger.warning("构建可视化数据失败", error=str(e))

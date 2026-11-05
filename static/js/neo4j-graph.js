@@ -203,40 +203,55 @@ class Neo4jGraph {
             return;
         }
 
+        // 节点按 id 去重（重复节点会在图上叠影）
+        const uniqueNodes = [];
+        const nodeById = new Map();
+        graphData.nodes.forEach((node, index) => {
+            const id = node.name || `node-${index}`;
+            if (nodeById.has(id)) return;
+            const n = {
+                ...node,
+                id: id,
+                name: node.name,
+                type: node.type || 'default',
+                description: node.description
+            };
+            nodeById.set(id, n);
+            uniqueNodes.push(n);
+        });
+
         // 计算合适的初始分布半径
-        const nodeCount = graphData.nodes.length;
+        const nodeCount = uniqueNodes.length;
         const minDimension = Math.min(this.width, this.height);
         const radius = Math.max(minDimension / 3, nodeCount * 20);
 
-        // 处理节点数据 - 设置随机初始位置
-        this.nodes = graphData.nodes.map((node, index) => {
-            // 使用螺旋分布算法，避免节点初始位置重叠
+        // 设置螺旋分布的初始位置，加上随机偏移，避免节点初始位置重叠
+        uniqueNodes.forEach((node, index) => {
             const angle = (index / nodeCount) * 2 * Math.PI * 3; // 多圈螺旋
             const r = (radius / nodeCount) * (index + 1) + this.options.nodeRadius * 2;
-            return {
-                id: node.name || `node-${index}`,
-                name: node.name,
-                type: node.type || 'default',
-                description: node.description,
-                // 设置螺旋分布的初始位置，加上随机偏移
-                x: this.width / 2 + r * Math.cos(angle) + (Math.random() - 0.5) * 30,
-                y: this.height / 2 + r * Math.sin(angle) + (Math.random() - 0.5) * 30,
-                ...node
-            };
+            node.x = this.width / 2 + r * Math.cos(angle) + (Math.random() - 0.5) * 30;
+            node.y = this.height / 2 + r * Math.sin(angle) + (Math.random() - 0.5) * 30;
         });
 
-        // 处理关系数据
+        this.nodes = uniqueNodes;
+        this._nodeById = nodeById;
+
+        // 关系端点解析为节点对象，两端任一未知的直接丢弃：
+        // d3 forceLink 遇到未知 id 会抛 "node not found"，
+        // 渲染中断后模拟器不启动，所有节点堆在 SVG 原点
         this.links = [];
         if (graphData.relationships) {
             graphData.relationships.forEach(rel => {
-                if (rel.start && rel.end) {
-                    this.links.push({
-                        source: rel.start.name || rel.start,
-                        target: rel.end.name || rel.end,
-                        type: rel.type || 'RELATED_TO',
-                        ...rel
-                    });
-                }
+                if (!rel.start || !rel.end) return;
+                const source = nodeById.get(rel.start.name || rel.start);
+                const target = nodeById.get(rel.end.name || rel.end);
+                if (!source || !target || source === target) return;
+                this.links.push({
+                    source: source,
+                    target: target,
+                    type: rel.type || 'RELATED_TO',
+                    ...rel
+                });
             });
         }
 
@@ -335,6 +350,16 @@ class Neo4jGraph {
             .attr('fill', '#333')
             .attr('font-weight', '500')
             .text(d => this.truncateText(d.name, 12));
+
+        // 立即应用螺旋初始位置：transform 只在 tick 回调里设置的话，
+        // 一旦模拟器未能启动（如异常中断），所有节点会堆在 SVG 原点
+        nodes.attr('transform', d => `translate(${d.x},${d.y})`);
+        links
+            .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+        linkLabels
+            .attr('x', d => (d.source.x + d.target.x) / 2)
+            .attr('y', d => (d.source.y + d.target.y) / 2);
 
         // 更新力导向模拟
         this.simulation
