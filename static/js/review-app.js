@@ -342,7 +342,7 @@
         try {
             const data = await apiGet("/api/entities");
             const names = [];
-            for (const layer of Object.values(data)) {
+            for (const layer of Object.values(data.entities || {})) {
                 if (Array.isArray(layer)) {
                     for (const entity of layer) {
                         if (entity.name) names.push(entity.name);

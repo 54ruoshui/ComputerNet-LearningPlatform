@@ -29,6 +29,41 @@
         answers: {},
     };
 
+    // 作答进度本地暂存：刷新/误触返回后可恢复（交卷成功即清除；按 被试码+阶段+testId 匹配）
+    const TRIAL_PROGRESS_KEY = "trial_test_progress";
+
+    function saveTrialProgress() {
+        if (!testState.testId || !testState.questions.length || !partState.code) return;
+        try {
+            localStorage.setItem(TRIAL_PROGRESS_KEY, JSON.stringify({
+                key: partState.code + ":" + testState.phase,
+                testId: testState.testId,
+                answers: testState.answers,
+                currentIdx: testState.currentIdx,
+                savedAt: Date.now(),
+            }));
+        } catch (e) { /* 存储失败不阻断作答 */ }
+    }
+
+    function clearTrialProgress() {
+        try { localStorage.removeItem(TRIAL_PROGRESS_KEY); } catch (e) {}
+    }
+
+    function restoreTrialProgress() {
+        try {
+            const raw = localStorage.getItem(TRIAL_PROGRESS_KEY);
+            if (!raw) return false;
+            const p = JSON.parse(raw);
+            if (!p || p.key !== partState.code + ":" + testState.phase || p.testId !== testState.testId) return false;
+            if (!p.answers || !Object.keys(p.answers).length) return false;
+            testState.answers = p.answers;
+            testState.currentIdx = Math.min(p.currentIdx || 0, testState.questions.length - 1);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
     // ==================== API ====================
 
     async function apiGet(url, headers) {
@@ -59,11 +94,18 @@
     }
 
     function showToast(msg, type) {
-        const toast = $("toast");
-        if (!toast) return;
+        const wrap = $("toastWrap");
+        if (!wrap) return;
+        while (wrap.children.length >= 5) wrap.firstChild.remove();  // 防刷屏
+        const toast = document.createElement("div");
+        toast.className = "quiz-toast " + (type || "success");
         toast.textContent = msg;
-        toast.className = "quiz-toast show " + (type || "success");
-        setTimeout(() => { toast.className = "quiz-toast"; }, 3000);
+        wrap.appendChild(toast);
+        requestAnimationFrame(() => toast.classList.add("show"));
+        setTimeout(() => {
+            toast.classList.remove("show");
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
     }
 
     function escapeHtml(str) {
@@ -424,8 +466,11 @@
             $("partTakeView").style.display = "flex";
             $("trialNav").style.display = "none";
             $("takeTitle").textContent = phase === "pre" ? "前测" : "后测";
+            // 先恢复暂存进度再渲染，否则首次渲染会把暂存覆盖成空
+            const restored = restoreTrialProgress();
             renderTakeQuestion();
             renderTrialNav();
+            if (restored) showToast("已恢复上次作答进度", "success");
         } catch (e) {
             showToast(e.message, "error");
         }
@@ -464,6 +509,7 @@
 
         const answered = Object.keys(testState.answers).length;
         $("takeAnsweredBadge").textContent = "已答 " + answered + "/" + total;
+        saveTrialProgress();
     }
 
     window.selectTrialOption = function (letter) {
@@ -474,6 +520,7 @@
         });
         const answered = Object.keys(testState.answers).length;
         $("takeAnsweredBadge").textContent = "已答 " + answered + "/" + testState.questions.length;
+        saveTrialProgress();
     };
 
     function renderTrialNav() {
@@ -527,24 +574,42 @@
         }
     };
 
+    let trialSubmitting = false;
+
     window.submitTrialTest = async function () {
+        if (trialSubmitting) return;  // 双击/最后一题两个入口防重
+        trialSubmitting = true;
         try {
             $("takeSubmitBtn").disabled = true;
             $("takeSubmitBtn").textContent = "提交中...";
+            $("takeNextBtn").disabled = true;
             const result = await apiPost("/api/trial/test/submit", {
                 test_id: testState.testId,
                 code: partState.code,
                 answers: testState.answers,
             });
+            clearTrialProgress();
+            testState.questions = [];
+            testState.answers = {};
             $("partTakeView").style.display = "none";
             $("partResultView").style.display = "block";
             renderPartResult(result);
         } catch (e) {
             showToast("提交失败：" + e.message, "error");
+            trialSubmitting = false;
             $("takeSubmitBtn").disabled = false;
             $("takeSubmitBtn").innerHTML = '<i class="fas fa-check"></i> 交卷';
+            $("takeNextBtn").disabled = false;
         }
     };
+
+    // 作答进行中离开页面前确认（配合 localStorage 暂存双保险）
+    window.addEventListener("beforeunload", function (e) {
+        if (testState.questions.length && Object.keys(testState.answers).length) {
+            e.preventDefault();
+            e.returnValue = "";
+        }
+    });
 
     function renderPartResult(result) {
         const accuracy = Math.round((result.accuracy || 0) * 100);

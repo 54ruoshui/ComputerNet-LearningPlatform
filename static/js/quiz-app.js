@@ -669,10 +669,18 @@
     // ==================== Toast ====================
 
     function showToast(msg, type) {
-        const toast = $("toast");
+        const wrap = $("toastWrap");
+        if (!wrap) return;
+        while (wrap.children.length >= 5) wrap.firstChild.remove();  // 防刷屏
+        const toast = document.createElement("div");
+        toast.className = "quiz-toast " + (type || "success");
         toast.textContent = msg;
-        toast.className = "quiz-toast " + type + " show";
-        setTimeout(() => { toast.className = "quiz-toast"; }, 3000);
+        wrap.appendChild(toast);
+        requestAnimationFrame(() => toast.classList.add("show"));
+        setTimeout(() => {
+            toast.classList.remove("show");
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
     }
 
     // ==================== 试卷考试 ====================
@@ -683,6 +691,40 @@
         currentIdx: 0,
         answers: {},
     };
+
+    // 考试进度本地暂存：刷新/误触返回后可恢复（提交成功即清除）
+    const EXAM_PROGRESS_KEY = "exam_progress";
+
+    function saveExamProgress() {
+        if (!examState.paperId || !examState.questions.length) return;
+        try {
+            localStorage.setItem(EXAM_PROGRESS_KEY, JSON.stringify({
+                paperId: examState.paperId,
+                answers: examState.answers,
+                currentIdx: examState.currentIdx,
+                savedAt: Date.now(),
+            }));
+        } catch (e) { /* 存储失败不阻断作答 */ }
+    }
+
+    function clearExamProgress() {
+        try { localStorage.removeItem(EXAM_PROGRESS_KEY); } catch (e) {}
+    }
+
+    function restoreExamProgress() {
+        try {
+            const raw = localStorage.getItem(EXAM_PROGRESS_KEY);
+            if (!raw) return false;
+            const p = JSON.parse(raw);
+            if (!p || p.paperId !== examState.paperId || !p.answers) return false;
+            if (!Object.keys(p.answers).length) return false;
+            examState.answers = p.answers;
+            examState.currentIdx = Math.min(p.currentIdx || 0, examState.questions.length - 1);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
 
     window.switchTab = function (tab) {
         currentTab = tab;
@@ -800,9 +842,12 @@
             $("examTakeTitle").textContent = paper.title;
             $("examQuestionNav").style.display = "none";
 
+            // 先恢复暂存进度再渲染，否则首次渲染会把暂存覆盖成空
+            var restored = restoreExamProgress();
             updateExamHeader();
             renderExamQuestion();
             renderQuestionNav();
+            if (restored) showToast("已恢复上次作答进度", "success");
         } catch (e) {
             showToast("加载试卷失败: " + e.message, "error");
         }
@@ -886,6 +931,7 @@
         }
 
         updateExamHeader();
+        saveExamProgress();
     }
 
     window.selectExamOption = function (letter) {
@@ -894,6 +940,7 @@
         document.querySelectorAll("#examOptionsList .option-btn").forEach(function (btn) {
             btn.classList.toggle("selected", btn.dataset.letter === letter);
         });
+        saveExamProgress();
     };
 
     window.examNextQuestion = function () {
@@ -921,23 +968,33 @@
         }
     };
 
+    var examSubmitting = false;
+
     window.submitExam = async function () {
+        if (examSubmitting) return;  // 双击/最后一题两个入口防重
+        examSubmitting = true;
         var sid = localStorage.getItem("graphrag_session_id") || "default";
         try {
             $("examSubmitBtn").disabled = true;
             $("examSubmitBtn").textContent = "批改中...";
+            $("examNextBtn").disabled = true;
             var result = await apiPost("/api/exam/submit", {
                 session_id: sid,
                 paper_id: examState.paperId,
                 answers: examState.answers
             });
+            clearExamProgress();
+            examState.questions = [];
+            examState.answers = {};
             $("examTakeView").style.display = "none";
             $("examResultView").style.display = "block";
             renderExamResult(result);
         } catch (e) {
             showToast("提交失败: " + e.message, "error");
+            examSubmitting = false;
             $("examSubmitBtn").disabled = false;
             $("examSubmitBtn").innerHTML = '<i class="fas fa-check"></i> 交卷';
+            $("examNextBtn").disabled = false;
         }
     };
 
@@ -1182,9 +1239,20 @@
         loadExamPapers();
     };
 
+    // 作答进行中离开页面前确认（配合 localStorage 暂存双保险）
+    window.addEventListener("beforeunload", function (e) {
+        if (examState.questions.length && Object.keys(examState.answers).length) {
+            e.preventDefault();
+            e.returnValue = "";
+        }
+    });
+
     // ==================== 键盘快捷键（支持刷题 + 考试模式）====================
 
     document.addEventListener("keydown", function (e) {
+        // 输入框（手动加题表单/AI 生成面板等）获得焦点时不劫持按键
+        const t = e.target;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
         if (currentTab === "exam" && $("examTakeView").style.display !== "none") {
             var key = e.key.toUpperCase();
             if (["A", "B", "C", "D"].includes(key)) {

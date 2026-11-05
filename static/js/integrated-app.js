@@ -625,7 +625,18 @@ function setupSearchSuggestions() {
 
 // ==================== Query Submission ====================
 
-async function submitQuery() {
+// 进行中的流式查询（含取消控制器）；非 null 时发送按钮呈"停止"形态
+var activeQuery = null;
+var STALL_TIMEOUT_MS = 90000;  // 连续无事件超过该时长视为后端挂起，自动中断
+
+async function submitQuery(fromStopButton) {
+    // 流式进行中：按钮点击 = 中断生成；键盘 Enter 只提示不中断（防误触）
+    if (activeQuery) {
+        if (fromStopButton) activeQuery.controller.abort();
+        else showMessage('当前问题仍在回答中，可点击停止按钮中断', 'warning');
+        return;
+    }
+
     var questionInput = document.getElementById('questionInput');
     if (!questionInput) return;
 
@@ -660,6 +671,26 @@ async function submitQuery() {
     var chatScroll = document.getElementById('chatScroll');
     if (chatScroll) chatScroll.scrollTop = chatScroll.scrollHeight;
 
+    var controller = new AbortController();
+    var queryState = { controller: controller, stalled: false };
+    activeQuery = queryState;
+
+    var sendBtn = document.getElementById('sendBtn');
+    if (sendBtn) {
+        sendBtn.classList.add('stop');
+        sendBtn.innerHTML = '<i class="fas fa-stop"></i>';
+        sendBtn.title = '停止生成';
+    }
+
+    var stallTimer = null;
+    function armStallTimer() {
+        if (stallTimer) clearTimeout(stallTimer);
+        stallTimer = setTimeout(function () {
+            queryState.stalled = true;
+            controller.abort();
+        }, STALL_TIMEOUT_MS);
+    }
+
     try {
         var requestBody = { question: question };
         if (currentSessionId) {
@@ -670,7 +701,8 @@ async function submitQuery() {
         var response = await fetch('/api/query/stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify(requestBody),
+            signal: controller.signal
         });
 
         if (!response.ok) {
@@ -697,10 +729,12 @@ async function submitQuery() {
         var reader = response.body.getReader();
         var decoder = new TextDecoder();
         var buffer = '';
+        armStallTimer();
 
         while (true) {
             var { done, value } = await reader.read();
             if (done) break;
+            armStallTimer();
 
             buffer += decoder.decode(value, { stream: true });
             var lines = buffer.split('\n');
@@ -813,15 +847,40 @@ async function submitQuery() {
         }
 
     } catch (error) {
-        console.error('查询失败:', error);
-        if (chatMessages) {
-            var errMsg = document.createElement('div');
-            errMsg.className = 'chat-msg chat-msg-ai';
-            errMsg.innerHTML = '<div class="msg-avatar"><i class="fas fa-exclamation-triangle"></i></div>' +
-                '<div class="msg-bubble msg-bubble-ai"><div class="msg-content"><p style="color:var(--red)">' + escapeHtml(error.message || '查询失败，请稍后再试') + '</p></div></div>';
-            chatMessages.appendChild(errMsg);
+        if (error && error.name === 'AbortError') {
+            // 手动停止或超时中断：保留已生成的部分内容，就地追加说明
+            var note = queryState.stalled
+                ? '（响应超时，已中断。可重新提问）'
+                : '（已停止生成）';
+            var abortEl = aiMsg ? aiMsg.querySelector('.msg-content') : null;
+            if (abortEl) {
+                abortEl.insertAdjacentHTML('beforeend',
+                    '<div class="stream-status" style="color:#888;font-size:13px;">' + note + '</div>');
+            } else if (chatMessages) {
+                var stopNote = document.createElement('div');
+                stopNote.className = 'chat-msg chat-msg-ai';
+                stopNote.innerHTML = '<div class="msg-avatar"><i class="fas fa-circle-stop"></i></div>' +
+                    '<div class="msg-bubble msg-bubble-ai"><div class="msg-content"><p style="color:#888">' + note + '</p></div></div>';
+                chatMessages.appendChild(stopNote);
+            }
+        } else {
+            console.error('查询失败:', error);
+            if (chatMessages) {
+                var errMsg = document.createElement('div');
+                errMsg.className = 'chat-msg chat-msg-ai';
+                errMsg.innerHTML = '<div class="msg-avatar"><i class="fas fa-exclamation-triangle"></i></div>' +
+                    '<div class="msg-bubble msg-bubble-ai"><div class="msg-content"><p style="color:var(--red)">' + escapeHtml(error.message || '查询失败，请稍后再试') + '</p></div></div>';
+                chatMessages.appendChild(errMsg);
+            }
         }
     } finally {
+        if (stallTimer) clearTimeout(stallTimer);
+        activeQuery = null;
+        if (sendBtn) {
+            sendBtn.classList.remove('stop');
+            sendBtn.innerHTML = '<i class="fas fa-arrow-up"></i>';
+            sendBtn.title = '发送';
+        }
         if (thinking) thinking.style.display = 'none';
         if (chatScroll) chatScroll.scrollTop = chatScroll.scrollHeight;
     }

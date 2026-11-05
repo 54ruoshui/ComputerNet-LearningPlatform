@@ -46,9 +46,17 @@ function safeNext() {
     return '/';
 }
 
+let authCooldown = false;
+
 function disableSubmit(seconds) {
     const btn = document.getElementById('authSubmitBtn');
-    if (!seconds) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-right-to-bracket"></i> <span id="authSubmitLabel">' + (authMode === 'register' ? '创建账号' : '登录') + '</span>'; return; }
+    if (!seconds) {
+        authCooldown = false;
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-right-to-bracket"></i> <span id="authSubmitLabel">' + (authMode === 'register' ? '创建账号' : '登录') + '</span>';
+        return;
+    }
+    authCooldown = true;
     btn.disabled = true;
     const tick = () => {
         btn.textContent = `请 ${seconds} 秒后重试`;
@@ -111,7 +119,7 @@ async function submitAuth(ev) {
     } catch (e) {
         showError('网络错误，请检查连接后重试');
     } finally {
-        btn.disabled = false;
+        if (!authCooldown) btn.disabled = false;  // 429 冷却倒计时期间不解禁
     }
 }
 

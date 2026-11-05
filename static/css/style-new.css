@@ -842,6 +842,8 @@ body {
 }
 .btn-send:hover { box-shadow: 0 4px 14px rgba(91, 123, 245, 0.32); transform: scale(1.05); }
 .btn-send:active { transform: scale(0.95); }
+.btn-send.stop { background: linear-gradient(135deg, var(--red, #ef4444) 0%, #f97316 100%); box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25); }
+.btn-send.stop:hover { box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35); }
 
 .input-meta {
     max-width: 780px;
